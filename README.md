@@ -1,5 +1,5 @@
 # MFT
-Simple implementation of matched filter technique
+Simple implementation of matched filter technique  
 <br>
 Procedures: <br>
 (1) Selection of template events from initial catalog <br>
