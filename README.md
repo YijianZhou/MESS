@@ -10,7 +10,7 @@ Procedures: <br>
 (1) Calculate theoretical arrival time <br>
 (2) Calculate SNR <br>
 
-<br>
+
 ## Run MFT  
 <br>
 (1) Calculate CC trace on every station's record <br>
