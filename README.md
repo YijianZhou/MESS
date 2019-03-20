@@ -11,7 +11,7 @@ Procedures: <br>
 (2) Calculate SNR <br>
 
 <br>
-## Run MFT  
+## Run MFT <br>
 
 (1) Calculate CC trace on every station's record <br>
 (2) Mask triggered times with peak CC values <br>
