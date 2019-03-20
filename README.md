@@ -6,13 +6,11 @@ Procedures: <br>
 (2) Run MFT <br>
 
 ## Selection of templates  
-
 (1) Calculate theoretical arrival time <br>
 (2) Calculate SNR <br>
 
 
 ## Run MFT  
-<br>
 (1) Calculate CC trace on every station's record <br>
 (2) Mask triggered times with peak CC values <br>
 (3) Time shift to original times for all stations <br>
