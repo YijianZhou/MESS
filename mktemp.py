@@ -23,20 +23,21 @@ def calc_ot(tp, ts):
 
 
 # i/o files
-catalog = './input/catalog_ZSY.dat'
-phase   = './input/phase_ZSY.dat'
+net = 'XLS'
+catalog = './input/catalog_%s.dat'%net
+phase   = './input/phase_%s.dat'%net
 f=open(catalog); events=f.readlines(); f.close()
 f=open(phase);   phases=f.readlines(); f.close()
-out_dir = './output/ZSY'
+out_dir = './output/%s'%net
 temp_dir = os.path.join(out_dir, 'Templates')
 if not os.path.exists(temp_dir):
     os.makedirs(temp_dir)
-ctlg_path = os.path.join(out_dir, 'ctlg_ZSY_temp.dat')
-pha_path  = os.path.join(out_dir, 'pha_ZSY_temp.dat')
+ctlg_path = os.path.join(out_dir, 'ctlg_%s_temp.dat'%net)
+pha_path  = os.path.join(out_dir, 'pha_%s_temp.dat'%net)
 out_ctlg = open(ctlg_path, 'w')
 out_pha  = open(pha_path, 'w')
 # make sta dir
-sta_file = '/data3/XJ_SAC/header/station_ZSY.dat'
+sta_file = '/data3/XJ_SAC/header/station_%s.dat'%net
 sta_dict = dp.get_sta_dict(sta_file)
 
 # params
@@ -62,7 +63,6 @@ for phase in phases:
   # head line
   if len(phase.split(','))==2:
     num_pick = int(phase.split(',')[1]); i=0
-    picks=[]
     event = events[event_id]
     event_id+=1
     print('-'*40)
@@ -70,6 +70,7 @@ for phase in phases:
     ot, lat, lon, dep = event.split(',')
     event_dir = os.path.join(temp_dir, ot)
     if not os.path.exists(event_dir): os.mkdir(event_dir)
+    event_picks.append([event, event_dir, []])#TODO
     # convert format
     ot =  UTCDateTime(ot)
     lat = float(lat)
@@ -79,7 +80,6 @@ for phase in phases:
 
   # org picks
   else:
-    i+=1
     # select all picks
     sta = phase.split(',')[1]
     sta_line = sta_dict[sta_dict['station']==sta]
@@ -87,6 +87,7 @@ for phase in phases:
     sta_lon = float(sta_line['longitude'])
     sta_ele = float(sta_line['elevation'])
     dist0 = 111*np.sqrt((sta_lat-lat)**2 + (sta_lon-lon)**2)
+    if dist0>max_dist: continue
 
     # theoretical arrival time
     dist1 = np.sqrt(dist0**2 + (dep+2)**2)
@@ -142,15 +143,13 @@ for phase in phases:
     sac.ch_event(out_paths[1], lon, lat, dep, 1, t0, t1)
     sac.ch_event(out_paths[2], lon, lat, dep, 1, t0, t1)
     oti = calc_ot(tp, ts)
-    if dist0<max_dist\
-       and p_snr>p_thres\
-       and s_snr0>s_thres and s_snr1>s_thres:
-        picks.append('{},{},{},{},{},{},{:.1f},{:.1f},{:.1f}\n'\
-              .format(sta, tp, ts, tp0, ts0, oti, p_snr, s_snr0, s_snr1))
+    if  p_snr>p_thres\
+    and s_snr0>s_thres\
+    and s_snr1>s_thres:
+        event_picks[-1][-1].append('{},{},{},{},{},{},{:.1f},{:.1f},{:.1f}\n'\
+            .format(sta, tp, ts, tp0, ts0, oti, p_snr, s_snr0, s_snr1))
     else:
         for fname in out_paths: os.unlink(fname)
-    if i==num_pick:
-        event_picks.append([event, event_dir, picks])
 
 
 # select all event picks
@@ -165,3 +164,4 @@ for event_pick in event_picks:
     out_pha.write(event)
     for pick in picks:
         out_pha.write(pick)
+
