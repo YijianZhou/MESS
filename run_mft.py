@@ -2,6 +2,7 @@ import os, sys, glob
 sys.path.append('/home/zhouyj/Xiaojiang/PpkAssocLoc')
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
 from obspy.core import *
 from scipy.signal import correlate
 import data_pipeline as dp
@@ -10,12 +11,14 @@ import time
 import warnings
 warnings.filterwarnings("ignore")
 
-def preprocess(st):
+def preprocess(st, decim_rate, freq_band):
+    st = st.decimate(decim_rate)
     st = st.detrend('demean')
     st = st.detrend('linear')
-#    st = st.taper(max_percentage=0.05)
-    return st.filter('bandpass', freqmin=1., freqmax=40.)
-
+    if type(freq_band)==list:
+        return st.filter('bandpass', freqmin=freq_band[0], freqmax=freq_band[1])
+    elif type(freq_band)==float:
+        return st.filter('highpass', freq=freq_band)
 
 def calc_cc(data, temp):
     """ Calc CC trace for a template trace
@@ -33,7 +36,10 @@ def calc_cc(data, temp):
     norm_data = np.sqrt(data_cum[ntemp:] - data_cum[0:-ntemp])
     norm_data  = norm_data[0:len(cc)-1]#TODO
     if len(norm_data)!=len(cc[1:]): return [0]
-    return cc[1:]/norm_temp/norm_data
+    cc = cc[1:]/norm_temp/norm_data
+    cc[np.isinf(cc)] = 0.
+    cc[np.isnan(cc)] = 0.
+    return cc
 
 
 def get_temp_events():
@@ -54,6 +60,17 @@ def get_temp_events():
             temp_events[-1][1][sta] = [tp, ts]
     return temp_events
 
+def plot(cc):
+    plt.subplot(4,1,1)
+    plt.plot(cc[0])
+    plt.subplot(4,1,2)
+    plt.plot(cc[1])
+    plt.subplot(4,1,3)
+    plt.plot(cc[2])
+    plt.subplot(4,1,4)
+    plt.plot((cc[0]+cc[1]+cc[2])/3.)
+    plt.show()
+
 
 def main(args):
 
@@ -67,11 +84,14 @@ def main(args):
   temp_dir = args.temp_dir
   # MFT params
   cfg = config.Config()
+  decim_rate = cfg.decim_rate
+  freq_band = cfg.freq_band
+  samp_rate = 100./decim_rate
   dt_trig = cfg.dt_trig
   dt_p = cfg.dt_p
   dt_s = cfg.dt_s
   trig_thres = cfg.trig_thres
-  mask_len = int(100*cfg.mask_len)
+  mask_len = int(samp_rate *cfg.mask_len)
 
   # get time range
   start_date = UTCDateTime(args.time_range.split(',')[0])
@@ -97,7 +117,7 @@ def main(args):
         st = read(data_dict[sta][0])
         st+= read(data_dict[sta][1])
         st+= read(data_dict[sta][2])
-        st = preprocess(st)
+        st = preprocess(st, decim_rate, freq_band)
         data_dict[sta] = st
     for sta in todel: data_dict.pop(sta)
 
@@ -122,7 +142,7 @@ def main(args):
             temp = read(temp_paths[0])
             temp+= read(temp_paths[1])
             temp+= read(temp_paths[2])
-            temp = preprocess(temp)
+            temp = preprocess(temp, decim_rate, freq_band)
             # slice template for trigger, P pick and S pick
             temp_trig = temp.slice(tp-dt_trig[0], tp+dt_trig[1])
             temp_p = temp.slice(tp-dt_p[0], tp+dt_p[1])
@@ -135,9 +155,8 @@ def main(args):
             cci_len = min([len(ccij) for ccij in cci])
             cci = [ccij[0:cci_len] for ccij in cci]
             cci = np.sum(cci,axis=0) /3.
-            cci[cci==np.inf] = 0
-            dt_idx = int(100*(tp-ot+dt_trig[0]))
-            cci = cci[dt_idx:]
+            dt_idx = int(samp_rate *(tp-ot+dt_trig[0]))
+            cci = cci[dt_idx:] # time shift to ot
             trig_idxs = np.where(cci>trig_thres)[0]
             slide_idx = 0
             num=0
@@ -147,25 +166,25 @@ def main(args):
                 trig_idx = trig_idxs[trig_idxs>=slide_idx][0]
                 cc_max = np.amax(cci[trig_idx:trig_idx+mask_len])
                 idx_max= np.argmax(cci[trig_idx:trig_idx+mask_len]) +trig_idx
-                oti = datetime + idx_max/100.
+                oti = datetime + idx_max/samp_rate
                 mask_idx0 = max(0, idx_max-mask_len//2)
                 mask_idx1 = idx_max+mask_len//2
                 cci[mask_idx0:mask_idx1] = cc_max
                 # pick P and S by cross-correlation
-                tp0 = datetime + (idx_max + dt_idx)/100.
+                tp0 = datetime + (idx_max + dt_idx)/samp_rate
                 ts0 = tp0+(ts-tp)
-                p_rng = [dt_p[0]+mask_len/100., dt_p[1]+mask_len/100.]
-                s_rng = [dt_s[0]+mask_len/100., dt_s[1]+mask_len/100.]
+                p_rng = [dt_p[0]+mask_len/samp_rate, dt_p[1]+mask_len/samp_rate]
+                s_rng = [dt_s[0]+mask_len/samp_rate, dt_s[1]+mask_len/samp_rate]
                 st_p = st.slice(tp0-p_rng[0], tp0+p_rng[1])
                 st_s = st.slice(ts0-s_rng[0], ts0+s_rng[1])
                 if len(st_p)!=3 or len(st_s)!=3: break
                 cc_p  = calc_cc(st_p[2].data, temp_p[2].data)
                 cc_s0 = calc_cc(st_s[0].data, temp_s[0].data)
                 cc_s1 = calc_cc(st_s[1].data, temp_s[1].data)
-                tpi = tp0 -p_rng[0] +dt_p[0] +np.argmax(cc_p)/100.
-                tsi = ts0 -s_rng[0] +dt_s[0] +(np.argmax(cc_s0)+np.argmax(cc_s1))/200.
+                tpi = tp0 -p_rng[0] +dt_p[0] +np.argmax(cc_p)/samp_rate
+                tsi = ts0 -s_rng[0] +dt_s[0] +(np.argmax(cc_s0)+np.argmax(cc_s1))/samp_rate/2.
                 s_amp = (sum(abs(np.array(st_s.max()[0:2]))))/2.
-                picks.append((sta, oti, tpi, tsi, s_amp, cc_max))
+                picks.append((sta, oti, tpi, tsi, s_amp, np.amax(cc_p), (np.amax(cc_s0)+np.amax(cc_s1))/2.))
                 # next trig
                 slide_idx = trig_idx + mask_len
                 if slide_idx>trig_idxs[-1]: break
@@ -182,7 +201,8 @@ def main(args):
                                        ('tp','O'),
                                        ('ts','O'),
                                        ('s_amp','O'),
-                                       ('cc','O')])
+                                       ('cc_p','O'),
+                                       ('cc_s','O')])
         det_idxs = np.where(cc_stack>trig_thres)[0]
         slide_idx = 0
         num=0
@@ -192,16 +212,16 @@ def main(args):
             if det_idx+2*mask_len>len(cc_stack)-1: break
             idx_max = np.argmax(cc_stack[det_idx:det_idx+2*mask_len])
             cc_max  = np.amax(cc_stack[det_idx:det_idx+2*mask_len])
-            oti = datetime + (det_idx+idx_max)/100.
+            oti = datetime + (det_idx+idx_max)/samp_rate
             print('detection: ', oti, round(cc_max,2))
-            out_ctlg.write('{},{},{},{},{:.2f}\n'.format(oti, head[1], head[2], head[3], cc_max))
+            out_ctlg.write('{},{},{},{},{:.3f}\n'.format(oti, head[1], head[2], head[3], cc_max))
             # write phase
-            event_pick = [pick for pick in picks if pick['ot']>oti-mask_len/100.\
-                                                and pick['ot']<oti+mask_len/100.]
-            out_pha.write('{},{},{},{}\n'.format(oti, head[1], head[2], head[3]))
+            event_pick = [pick for pick in picks if pick['ot']>oti-mask_len/samp_rate\
+                                                and pick['ot']<oti+mask_len/samp_rate]
+            out_pha.write('{},{},{},{},{:.3f}\n'.format(oti, head[1], head[2], head[3], cc_max))
             for pick in event_pick:
-                out_pha.write('{},{},{},{:.2f},{:.2f}\n'.\
-                       format(pick['sta'], pick['tp'], pick['ts'], pick['s_amp'], pick['cc']))
+                out_pha.write('{},{},{},{:.2f},{:.3f},{:.3f}\n'.\
+                       format(pick['sta'], pick['tp'], pick['ts'], pick['s_amp'], pick['cc_p'], pick['cc_s']))
             slide_idx = det_idx + 2*mask_len
             if slide_idx>det_idxs[-1]: break
         print('time consumption: {:.2f}'.format(time.time()-t0))
