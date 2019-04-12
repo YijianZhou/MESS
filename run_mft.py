@@ -216,8 +216,9 @@ def main(args):
             num+=1
             det_idx = det_idxs[det_idxs>=slide_idx][0]
             if det_idx+2*mask_len>len(cc_stack)-1: break
-            idx_max = np.argmax(cc_stack[det_idx:det_idx+2*mask_len])
             cc_max  = np.amax(cc_stack[det_idx:det_idx+2*mask_len])
+            idx_max = np.where(cc_stack[det_idx:det_idx+2*mask_len]==cc_max)
+            idx_max = int(np.median(idx_max))
             oti = datetime + (det_idx+idx_max)/samp_rate
             print('detection: ', oti, round(cc_max,2))
             out_ctlg.write('{},{},{},{},{:.3f}\n'.format(oti, head[1], head[2], head[3], cc_max))
