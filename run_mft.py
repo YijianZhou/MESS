@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from obspy.core import *
 from scipy.signal import correlate
 import data_pipeline as dp
+import pickers
 import config
 import time
 import warnings
@@ -92,6 +93,7 @@ def main(args):
   dt_s = cfg.dt_s
   trig_thres = cfg.trig_thres
   mask_len = int(samp_rate *cfg.mask_len)
+  picker = pickers.Trad_PS()
 
   # get time range
   start_date = UTCDateTime(args.time_range.split(',')[0])
@@ -155,8 +157,10 @@ def main(args):
             cci_len = min([len(ccij) for ccij in cci])
             cci = [ccij[0:cci_len] for ccij in cci]
             cci = np.sum(cci,axis=0) /3.
-            dt_idx = int(samp_rate *(tp-ot+dt_trig[0]))
-            cci = cci[dt_idx:] # time shift to ot
+            # time shift to ot
+            dt_idx = int(samp_rate *(tp-ot-dt_trig[0]))
+            if dt_idx>0: cci = cci[dt_idx:]
+            else:        cci = np.concatenate((np.zeros(-dt_idx), cci))
             trig_idxs = np.where(cci>trig_thres)[0]
             slide_idx = 0
             num=0
@@ -183,7 +187,9 @@ def main(args):
                 cc_s1 = calc_cc(st_s[1].data, temp_s[1].data)
                 tpi = tp0 -p_rng[0] +dt_p[0] +np.argmax(cc_p)/samp_rate
                 tsi = ts0 -s_rng[0] +dt_s[0] +(np.argmax(cc_s0)+np.argmax(cc_s1))/samp_rate/2.
-                s_amp = (sum(abs(np.array(st_s.max()[0:2]))))/2.
+                s_amp0 = picker.get_amp(st_s[0].data)
+                s_amp1 = picker.get_amp(st_s[1].data)
+                s_amp = (s_amp0+s_amp1)/2.
                 picks.append((sta, oti, tpi, tsi, s_amp, np.amax(cc_p), (np.amax(cc_s0)+np.amax(cc_s1))/2.))
                 # next trig
                 slide_idx = trig_idx + mask_len
