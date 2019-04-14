@@ -1,18 +1,24 @@
 import os, sys, glob
 sys.path.append('/home/zhouyj/Xiaojiang/PpkAssocLoc')
 import argparse
+import time
 import numpy as np
 import matplotlib.pyplot as plt
-from obspy.core import *
+from obspy import read, UTCDateTime
 from scipy.signal import correlate
+# import seis tool from PpkAssocLoc
 import data_pipeline as dp
 import pickers
 import config
-import time
 import warnings
 warnings.filterwarnings("ignore")
 
 def preprocess(st, decim_rate, freq_band):
+    # time alignment
+    start_time = max([tr.stats.starttime for tr in st])
+    end_time   = min([tr.stats.endtime   for tr in st])
+    st = st.slice(start_time, end_time)
+    # signal process
     st = st.decimate(decim_rate)
     st = st.detrend('demean')
     st = st.detrend('linear')
@@ -20,6 +26,7 @@ def preprocess(st, decim_rate, freq_band):
         return st.filter('bandpass', freqmin=freq_band[0], freqmax=freq_band[1])
     elif type(freq_band)==float:
         return st.filter('highpass', freq=freq_band)
+
 
 def calc_cc(data, temp):
     """ Calc CC trace for a template trace
@@ -61,17 +68,6 @@ def get_temp_events():
             temp_events[-1][1][sta] = [tp, ts]
     return temp_events
 
-def plot(cc):
-    plt.subplot(4,1,1)
-    plt.plot(cc[0])
-    plt.subplot(4,1,2)
-    plt.plot(cc[1])
-    plt.subplot(4,1,3)
-    plt.plot(cc[2])
-    plt.subplot(4,1,4)
-    plt.plot((cc[0]+cc[1]+cc[2])/3.)
-    plt.show()
-
 
 def main(args):
 
@@ -106,11 +102,12 @@ def main(args):
   for day_idx in range(num_day):
 
     # get data paths
-    datetime = start_date + day_idx*86400
-    data_dict = dp.get_xj(args.data_dir, datetime)
+    date = start_date + day_idx*86400
+    data_dict = dp.get_xj(args.data_dir, date)
     if data_dict=={}: continue
     print('-'*40)
-    print('detecting %s'%datetime.date)
+    print('detecting %s'%date.date)
+    # read data and preprocess
     print('read data')
     todel=[]
     for sta in data_dict:
@@ -120,6 +117,8 @@ def main(args):
         st+= read(data_dict[sta][1])
         st+= read(data_dict[sta][2])
         st = preprocess(st, decim_rate, freq_band)
+        if len(st)!=3: 
+            todel.append(sta); continue
         data_dict[sta] = st
     for sta in todel: data_dict.pop(sta)
 
@@ -135,6 +134,7 @@ def main(args):
         picks=[]
         if len([sta for sta in temp_event[1] if sta in data_dict])<4: continue
         for sta, [tp, ts] in temp_event[1].items():
+
             # get continuous data
             if sta not in data_dict: continue
             st = data_dict[sta]
@@ -145,22 +145,30 @@ def main(args):
             temp+= read(temp_paths[1])
             temp+= read(temp_paths[2])
             temp = preprocess(temp, decim_rate, freq_band)
+            if len(temp)!=3: continue
             # slice template for trigger, P pick and S pick
             temp_trig = temp.slice(tp-dt_trig[0], tp+dt_trig[1])
             temp_p = temp.slice(tp-dt_p[0], tp+dt_p[1])
             temp_s = temp.slice(ts-dt_s[0], ts+dt_s[1])
+
             # calc trig cc
             cci=[]
             cci.append(calc_cc(st[0].data, temp_trig[0].data))
             cci.append(calc_cc(st[1].data, temp_trig[1].data))
             cci.append(calc_cc(st[2].data, temp_trig[2].data))
-            cci_len = min([len(ccij) for ccij in cci])
-            cci = [ccij[0:cci_len] for ccij in cci]
             cci = np.sum(cci,axis=0) /3.
+
             # time shift to ot
-            dt_idx = int(samp_rate *(tp-ot-dt_trig[0]))
-            if dt_idx>0: cci = cci[dt_idx:]
-            else:        cci = np.concatenate((np.zeros(-dt_idx), cci))
+            cci_holder = np.zeros(int(86400*samp_rate))
+            dt_st = st[0].stats.starttime -date
+            dt_ot = ot-tp + dt_trig[0]
+            dt_ot_tp = int(samp_rate*(tp-ot))
+            dt = int(samp_rate*(dt_st + dt_ot))
+            cci = cci[max(0,-dt):max(0,-dt)+len(cci)]
+            cci_holder[max(0,dt):max(0,dt)+len(cci)] = cci
+            cci = cci_holder
+
+            # cc mask
             trig_idxs = np.where(cci>trig_thres)[0]
             slide_idx = 0
             num=0
@@ -169,24 +177,24 @@ def main(args):
                 # mask cci with max cc
                 trig_idx = trig_idxs[trig_idxs>=slide_idx][0]
                 cc_max = np.amax(cci[trig_idx:trig_idx+mask_len])
-                idx_max= np.argmax(cci[trig_idx:trig_idx+mask_len]) +trig_idx
-                oti = datetime + idx_max/samp_rate
+                idx_max = np.argmax(cci[trig_idx:trig_idx+mask_len]) +trig_idx
+                oti = date + idx_max/samp_rate
                 mask_idx0 = max(0, idx_max-mask_len//2)
                 mask_idx1 = idx_max+mask_len//2
                 cci[mask_idx0:mask_idx1] = cc_max
                 # pick P and S by cross-correlation
-                tp0 = datetime + (idx_max + dt_idx)/samp_rate
-                ts0 = tp0+(ts-tp)
-                p_rng = [dt_p[0]+mask_len/samp_rate, dt_p[1]+mask_len/samp_rate]
-                s_rng = [dt_s[0]+mask_len/samp_rate, dt_s[1]+mask_len/samp_rate]
-                st_p = st.slice(tp0-p_rng[0], tp0+p_rng[1])
-                st_s = st.slice(ts0-s_rng[0], ts0+s_rng[1])
+                tpi0 = date + (idx_max + dt_ot_tp)/samp_rate
+                tsi0 = tpi0 + (ts-tp)
+                p_rng = [dt_p[0]+  mask_len/samp_rate, dt_p[1]+  mask_len/samp_rate]
+                s_rng = [dt_s[0]+2*mask_len/samp_rate, dt_s[1]+2*mask_len/samp_rate]
+                st_p = st.slice(tpi0-p_rng[0], tpi0+p_rng[1])
+                st_s = st.slice(tsi0-s_rng[0], tsi0+s_rng[1])
                 if len(st_p)!=3 or len(st_s)!=3: break
                 cc_p  = calc_cc(st_p[2].data, temp_p[2].data)
                 cc_s0 = calc_cc(st_s[0].data, temp_s[0].data)
                 cc_s1 = calc_cc(st_s[1].data, temp_s[1].data)
-                tpi = tp0 -p_rng[0] +dt_p[0] +np.argmax(cc_p)/samp_rate
-                tsi = ts0 -s_rng[0] +dt_s[0] +(np.argmax(cc_s0)+np.argmax(cc_s1))/samp_rate/2.
+                tpi = tpi0 -p_rng[0] +dt_p[0] +np.argmax(cc_p)/samp_rate
+                tsi = tsi0 -s_rng[0] +dt_s[0] +(np.argmax(cc_s0)+np.argmax(cc_s1))/samp_rate/2.
                 s_amp0 = picker.get_amp(st_s[0].data)
                 s_amp1 = picker.get_amp(st_s[1].data)
                 s_amp = (s_amp0+s_amp1)/2.
@@ -198,8 +206,6 @@ def main(args):
             cc.append(cci)
         # detect with stacked cc trace
         if len(cc)<4: continue
-        cc_len = min([len(cci) for cci in cc])
-        cc = [cci[0:cc_len] for cci in cc]
         cc_stack = np.sum(cc,axis=0) /len(cc)
         # write catalog
         picks = np.array(picks, dtype=[('sta','O'),
@@ -219,7 +225,7 @@ def main(args):
             cc_max  = np.amax(cc_stack[det_idx:det_idx+2*mask_len])
             idx_max = np.where(cc_stack[det_idx:det_idx+2*mask_len]==cc_max)
             idx_max = int(np.median(idx_max))
-            oti = datetime + (det_idx+idx_max)/samp_rate
+            oti = date + (det_idx+idx_max)/samp_rate
             print('detection: ', oti, round(cc_max,2))
             out_ctlg.write('{},{},{},{},{:.3f}\n'.format(oti, head[1], head[2], head[3], cc_max))
             # write phase
@@ -241,9 +247,9 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str,
-                        default='/data3/XJ_SAC/[Y-Z]*/*')
+                        default='/data3/XJ_SAC/*/*')
     parser.add_argument('--time_range', type=str,
-                        default='20160903,20180901')
+                        default='20160901,20190201')
     parser.add_argument('--temp_dir', type=str,
                         default='./output/ZSY/Templates')
     parser.add_argument('--temp_pha', type=str,
