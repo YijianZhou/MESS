@@ -55,7 +55,7 @@ def get_temp_events():
     temp_events=[]
     for line in lines:
         info = line.split(',')
-        if len(info)==4:
+        if len(info)==5:
             lat = float(info[1])
             lon = float(info[2])
             dep = float(info[3])
@@ -72,13 +72,11 @@ def get_temp_events():
 def main(args):
 
   # i/o file
-  if os.path.exists(args.out_ctlg):
-      os.unlink(args.out_ctlg)
-      os.unlink(args.out_pha)
-  out_ctlg = open(args.out_ctlg, 'a')
-  out_pha  = open(args.out_pha,  'a')
+  out_ctlg = open(args.out_ctlg, 'w')
+  out_pha  = open(args.out_pha,  'w')
   temp_events = get_temp_events()
   temp_dir = args.temp_dir
+
   # MFT params
   cfg = config.Config()
   decim_rate = cfg.decim_rate
