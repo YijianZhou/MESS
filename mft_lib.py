@@ -1,5 +1,6 @@
 from scipy.signal import correlate
 import numpy as np
+import time
 
 def calc_cc(data, temp):
 
@@ -27,6 +28,7 @@ def calc_masked_cc(temp_event, temp_dict, data_dict,
                    win_trig, trig_thres, mask_len, 
                    date, samp_rate):
 
+    t0=time.time()
     cc = []
     temp_head = temp_event[0]
     temp_picks = temp_event[1]
