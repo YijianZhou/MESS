@@ -23,7 +23,39 @@ def calc_cc(data, temp):
     return cc
 
 
-# 1. calc cc trace & time shift to ot
+def calc_masked_cc(temp_event, temp_dict, data_dict, 
+                   win_trig, trig_thres, mask_len, 
+                   date, samp_rate):
+
+    cc = []
+    temp_head = temp_event[0]
+    temp_picks = temp_event[1]
+    temp_name = temp_head[0]
+    temp_ot = temp_head[1]
+
+    for sta, [temp_tp, temp_ts] in temp_picks.items():
+
+        # get data
+        if sta not in data_dict: continue
+        if sta not in temp_dict[temp_name]: continue
+        st = data_dict[sta]
+        temp = temp_dict[temp_name][sta]
+        temp_trig = temp.slice(temp_tp - win_trig[0], temp_tp + win_trig[1])
+
+        # calc shifted cc trace
+        dt_st = st[0].stats.starttime - date
+        dt_ot = temp_ot - temp_tp + win_trig[0]
+        cci = calc_shifted_cc(temp_trig, st, dt_st + dt_ot, samp_rate)
+
+        # calc masked cc trace & ppk
+        cci, num = mask_cc(cci, trig_thres, mask_len, date, samp_rate)
+        cc.append(cci)
+        print('{} process {} trigs | time {:.2f}'.format(sta, num, time.time()-t0))
+
+    return cc
+
+
+# 1. calc cc trace & time shift
 def calc_shifted_cc(temp_trig, st, dt, samp_rate):
 
     # calc trig cc
@@ -40,14 +72,15 @@ def calc_shifted_cc(temp_trig, st, dt, samp_rate):
     return cci_holder
 
 
-# 2. calc masked cc trace
-def calc_masked_cc(cci, trig_thres, mask_len, temp_p, temp_s, st, win_p, win_s, date, dt_ot_tp, dt_s_p, samp_rate, sta, picker):
+# 2. mask cc trace
+def mask_cc(cci, trig_thres, mask_len, date, samp_rate):
 
   # cc mask
   trig_idxs = np.where(cci > trig_thres)[0]
   slide_idx = 0
-  picksi = []
+  num=0
   for _ in trig_idxs:
+    num+=1
 
     # mask cci with max cc
     trig_idx = trig_idxs[trig_idxs >= slide_idx][0]
@@ -58,36 +91,10 @@ def calc_masked_cc(cci, trig_thres, mask_len, temp_p, temp_s, st, win_p, win_s, 
     mask_idx1 = idx_max + mask_len//2
     cci[mask_idx0 : mask_idx1] = cc_max
 
-    # pick P and S by cross-correlation
-    tpi0 = date + (idx_max + dt_ot_tp) /samp_rate
-    tsi0 = tpi0 + dt_s_p
-    # cut p&s data
-    p_rng = [win_p[0] +  mask_len /samp_rate,
-             win_p[1] +  mask_len /samp_rate]
-    s_rng = [win_s[0] +2*mask_len /samp_rate,
-             win_s[1] +2*mask_len /samp_rate]
-    st_p = st.slice(tpi0 - p_rng[0], tpi0 + p_rng[1])
-    st_s = st.slice(tsi0 - s_rng[0], tsi0 + s_rng[1])
-    if len(st_p)!=3 or len(st_s)!=3: break
-    # ppk by cc
-    cc_p  = calc_cc(st_p[2].data, temp_p[2].data)
-    cc_s0 = calc_cc(st_s[0].data, temp_s[0].data)
-    cc_s1 = calc_cc(st_s[1].data, temp_s[1].data)
-    tpi = tpi0 - p_rng[0] + win_p[0] + np.argmax(cc_p) /samp_rate
-    tsi = tsi0 - s_rng[0] + win_s[0] + (np.argmax(cc_s0) + np.argmax(cc_s1)) /samp_rate/2.
-    cc_p_max = np.amax(cc_p)
-    cc_s_max = (np.amax(cc_s0) + np.amax(cc_s1)) /2
-
-    # get S amplitude
-    ampx = picker.get_amp(st_s[0].data)
-    ampy = picker.get_amp(st_s[1].data)
-    ampz = picker.get_amp(st_s[2].data)
-    s_amp = np.sqrt(ampx**2 + ampy**2 + ampz**2)
-    picksi.append((sta, oti, tpi, tsi, s_amp, cc_p_max, cc_s_max))
     # next trig
     slide_idx = trig_idx + mask_len
-    if slide_idx>trig_idxs[-1]: break
-  return cci, picksi
+    if slide_idx > trig_idxs[-1]: break
+  return cci, num
 
 
 # 3. detect in stacked cc trace
@@ -95,7 +102,7 @@ def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
 
   det_idxs = np.where(cc_stack > trig_thres)[0]
   slide_idx = 0
-  ots = []
+  det_ots = []
   for _ in det_idxs:
 
     # this detection
@@ -106,27 +113,75 @@ def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
     cc_max  = np.amax(cc_stack[det_idx : det_idx + 2*mask_len])
     idx_max = np.where(cc_stack[det_idx: det_idx + 2*mask_len] == cc_max)
     idx_max = int(np.median(idx_max))
-    oti = date + (det_idx + idx_max) /samp_rate
-    ots.append([oti, cc_max])
-    print('detection: ', oti, round(cc_max,2))
+    det_oti = date + (det_idx + idx_max) /samp_rate
+    det_ots.append([det_oti, cc_max])
+    print('detection: ', det_oti, round(cc_max,2))
 
     # next detection
     slide_idx = det_idx + 2*mask_len
-    if slide_idx>det_idxs[-1]: break
-  return ots
+    if slide_idx > det_idxs[-1]: break
+  return det_ots
 
 
-def write_det_ppk(ots, temp_head, picks, ot_dev, out_ctlg, out_pha):
+# 4. pick P&S by cc
+def ppk_cc(det_oti, temp_event, temp_dict, data_dict, 
+           win_p, win_s, picker, mask_len, samp_rate):
 
-  for [oti, cc_max] in ots:
+  picksi = []
+  temp_name = temp_event[0][0]
+  temp_ot = temp_event[0][1]
+  temp_picks = temp_event[1]
+  for sta, [temp_tp, temp_ts] in temp_picks.items():
+
+    # get data
+    if sta not in data_dict: continue
+    if sta not in temp_dict[temp_name]: continue
+    st = data_dict[sta]
+    temp = temp_dict[temp_name][sta]
+    temp_p = temp.slice(temp_tp - win_p[0], temp_tp + win_p[1])
+    temp_s = temp.slice(temp_ts - win_s[0], temp_ts + win_s[1])
+
+    tpi0 = det_oti + (temp_tp - temp_ot)
+    tsi0 = det_oti + (temp_ts - temp_ot)
+
+    # cut p&s data
+    p_rng = [win_p[0] +  mask_len /samp_rate,
+             win_p[1] +  mask_len /samp_rate]
+    s_rng = [win_s[0] +2*mask_len /samp_rate,
+             win_s[1] +2*mask_len /samp_rate]
+    st_p = st.slice(tpi0 - p_rng[0], tpi0 + p_rng[1])
+    st_s = st.slice(tsi0 - s_rng[0], tsi0 + s_rng[1])
+    if len(st_p)!=3 or len(st_s)!=3: break
+
+    # ppk by cc
+    cc_p  = calc_cc(st_p[2].data, temp_p[2].data)
+    cc_s0 = calc_cc(st_s[0].data, temp_s[0].data)
+    cc_s1 = calc_cc(st_s[1].data, temp_s[1].data)
+    tpi = tpi0 - p_rng[0] + win_p[0] + np.argmax(cc_p) /samp_rate
+    tsi = tsi0 - s_rng[0] + win_s[0] + (np.argmax(cc_s0) + np.argmax(cc_s1)) /samp_rate /2.
+    cc_p_max = np.amax(cc_p)
+    cc_s_max = (np.amax(cc_s0) + np.amax(cc_s1)) /2
+
+    # get S amplitude
+    ampx = picker.get_amp(st_s[0].data)
+    ampy = picker.get_amp(st_s[1].data)
+    ampz = picker.get_amp(st_s[2].data)
+    s_amp = np.sqrt(ampx**2 + ampy**2 + ampz**2)
+
+    # add pick
+    picksi.append([sta, tpi, tsi, s_amp, cc_p_max, cc_s_max])
+  return picksi
+
+
+def write_det_ppk(det_oti, det_cci, temp_loc, picks, out_ctlg, out_pha):
+
     # write catalog
-    loc = temp_head[1:]
-    out_ctlg.write('{},{},{},{},{:.3f}\n'.format(oti,loc[0],loc[1],loc[2],cc_max))
+    event_line = '{},{},{},{},{:.3f}\n'.\
+    format(det_oti, temp_loc[0], temp_loc[1], temp_loc[2], det_cci)
+    out_ctlg.write(event_line)
     # write phase
-    event_pick = [pick for pick in picks if pick['ot'] > oti - ot_dev\
-                                        and pick['ot'] < oti + ot_dev]
-    out_pha.write('{},{},{},{},{:.3f}\n'.format(oti,loc[0],loc[1],loc[2],cc_max))
-    for pick in event_pick:
+    out_pha.write(event_line)
+    for pick in picks:
         out_pha.write('{},{},{},{:.2f},{:.3f},{:.3f}\n'.\
-        format(pick['sta'],pick['tp'],pick['ts'],pick['s_amp'],pick['cc_p'],pick['cc_s']))
+        format(pick[0], pick[1], pick[2], pick[3], pick[4], pick[5]))
 
