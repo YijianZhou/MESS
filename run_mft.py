@@ -143,11 +143,10 @@ def main(args):
         # init
         t0=time.time()
         temp_head = temp_event[0]
+        temp_picks = temp_event[1]
         print('-'*40)
         print('template ', temp_head)
-        temp_name = temp_head[0]
-        temp_ot = temp_head[1]
-        if len([sta for sta in temp_event[1] if sta in data_dict])<4: continue
+        if len([sta for sta in temp_picks if sta in data_dict])<4: continue
 
         # for each station, calc masked cc trace
         cc = calc_masked_cc(temp_event, temp_dict, data_dict, 
