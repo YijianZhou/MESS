@@ -14,6 +14,7 @@ def calc_cc(data, temp):
 
     ntemp = len(temp)
     ndata = len(data)
+    if ntemp>ndata: return [0]
     cc = correlate(data, temp, mode='valid')
     norm_temp = np.sqrt(np.sum(temp**2))
     data_cum = np.cumsum(data**2)
