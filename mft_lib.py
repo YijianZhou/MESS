@@ -1,8 +1,9 @@
 from scipy.signal import correlate
+from multiprocessing import Pool
 import numpy as np
 import time
 
-def calc_cc(data, temp):
+def calc_cc(data, temp, **kwargs):
 
     """ Calc CC trace for a template trace
     Input
@@ -15,44 +16,57 @@ def calc_cc(data, temp):
     ntemp = len(temp)
     ndata = len(data)
     if ntemp>ndata: return [0]
+    if 'norm_temp' in kwargs: norm_temp = kwargs['norm_temp']
+    else: norm_temp = np.sqrt(np.sum(temp**2))
+    if 'norm_data' in kwargs: norm_data = kwargs['norm_data']
+    else:
+        data_cum = np.cumsum(data**2)
+        norm_data = np.sqrt(data_cum[ntemp:] - data_cum[:-ntemp])
     cc = correlate(data, temp, mode='valid')
-    norm_temp = np.sqrt(np.sum(temp**2))
-    data_cum = np.cumsum(data**2)
-    norm_data = np.sqrt(data_cum[ntemp:] - data_cum[:-ntemp])
     cc = cc[1:] /norm_temp /norm_data
     cc[np.isinf(cc)] = 0.
     cc[np.isnan(cc)] = 0.
     return cc
 
 
+def calc_masked_cci(temp, stream, norm_temp, norm_data, dt, samp_rate, trig_thres, mask_len):
+    # calc shifted cc trace
+    cci = calc_shifted_cc(temp, stream, norm_temp, norm_data, dt, samp_rate)
+    # calc masked cc trace & ppk
+    cci, num = mask_cc(cci, trig_thres, mask_len)
+    return [cci, num]
+
+
 def calc_masked_cc(temp_picks, data_dict, trig_thres, mask_len, samp_rate):
 
-    t0=time.time()
-    cc = []
+    t=time.time()
+    out = []
+    pool = Pool(processes=len(temp_picks))
 
-    for sta, [temp_trig, _, _, _, _, _, dt_ot] in temp_picks.items():
-
+    for sta, [temp, norm_temp, _, _, _, dt_ot] in temp_picks.items():
         # get data
         if sta not in data_dict: continue
-        [stream, date, dt_st] = data_dict[sta]
-        
-        # calc shifted cc trace
-        cci = calc_shifted_cc(temp_trig, stream, dt_st + dt_ot, samp_rate)
-        # calc masked cc trace & ppk
-        cci, num = mask_cc(cci, trig_thres, mask_len)
-        cc.append(cci)
-        print('{} process {} trigs | time {:.2f}'.format(sta, num, time.time()-t0))
-
+        [stream, norm_data, date, dt_st] = data_dict[sta]
+        # process a station
+        outi = pool.apply_async(calc_masked_cci, 
+                          args=(temp[0], stream, norm_temp[0], norm_data,
+                                dt_st + dt_ot, samp_rate, trig_thres, mask_len))
+        out.append([sta, outi])
+    pool.close()
+    pool.join()
+    for [sta, outi] in out: print('{} {} trigs'.format(sta, outi.get()[1]))
+    cc = [outi.get()[0] for [_, outi] in out]
+    print('process {} stations | time {:.2f}'.format(len(temp_picks), time.time()-t))
     return cc
 
 
 # 1. calc cc trace & time shift
-def calc_shifted_cc(temp_trig, stream, dt, samp_rate):
+def calc_shifted_cc(temp_trig, stream, norm_temp, norm_data, dt, samp_rate):
 
     # calc trig cc
-    cci = calc_cc(stream[0].data, temp_trig[0].data)
-    cci+= calc_cc(stream[1].data, temp_trig[1].data)
-    cci+= calc_cc(stream[2].data, temp_trig[2].data)
+    cci = calc_cc(stream[0].data, temp_trig[0], norm_data=norm_data[0], norm_temp=norm_temp[0])
+    cci+= calc_cc(stream[1].data, temp_trig[1], norm_data=norm_data[1], norm_temp=norm_temp[1])
+    cci+= calc_cc(stream[2].data, temp_trig[2], norm_data=norm_data[2], norm_temp=norm_temp[2])
     cci = cci / 3.
 
     # time shift to ot
@@ -118,11 +132,11 @@ def ppk_cc(det_oti, temp_picks, data_dict,
            win_p, win_s, picker, mask_len, samp_rate):
 
   picksi = []
-  for sta, [_, temp_p, temp_s, tp, ts, ot, _] in temp_picks.items():
+  for sta, [temp, norm_temp, tp, ts, ot, _] in temp_picks.items():
 
     # get data
     if sta not in data_dict: continue
-    [stream, _, dt_st] = data_dict[sta]
+    [stream, _, _, dt_st] = data_dict[sta]
 
     tpi0 = det_oti + (tp - ot)
     tsi0 = det_oti + (ts - ot)
@@ -137,9 +151,9 @@ def ppk_cc(det_oti, temp_picks, data_dict,
     if len(st_p)!=3 or len(st_s)!=3: break
 
     # ppk by cc
-    cc_p  = calc_cc(st_p[2].data, temp_p[2].data)
-    cc_s0 = calc_cc(st_s[0].data, temp_s[0].data)
-    cc_s1 = calc_cc(st_s[1].data, temp_s[1].data)
+    cc_p  = calc_cc(st_p[2].data, temp[0][2], norm_temp=norm_temp[1][2])
+    cc_s0 = calc_cc(st_s[0].data, temp[1][0], norm_temp=norm_temp[2][0])
+    cc_s1 = calc_cc(st_s[1].data, temp[1][1], norm_temp=norm_temp[2][1])
     tpi = tpi0 - p_rng[0] + win_p[0] + np.argmax(cc_p) / samp_rate
     tsi = tsi0 - s_rng[0] + win_s[0] + (np.argmax(cc_s0) + np.argmax(cc_s1)) / samp_rate / 2.
     cc_p_max = np.amax(cc_p)

@@ -1,5 +1,5 @@
 import os, sys, glob
-sys.path.append('/home/zhouyj/Xiaojiang/PpkDet')
+sys.path.append('/home/zhouyj/Documents/PpkDet')
 import argparse
 import time
 import numpy as np
@@ -8,6 +8,7 @@ from obspy import read, UTCDateTime
 import data_pipeline as dp
 import pickers
 # import MFT functions
+from dataset import get_temp_dict, read_data
 from mft_lib import *
 import config
 import warnings
@@ -17,7 +18,7 @@ import matplotlib.pyplot as plt
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str,
-                        default='/data3/XJ_SAC/[Y-Z]*/*')
+                        default='/data/ZSY_SAC/[Y-Z]*/*')
     parser.add_argument('--time_range', type=str,
                         default='20160901,20190201')
     parser.add_argument('--temp_root', type=str,
@@ -29,92 +30,6 @@ if __name__ == '__main__':
     parser.add_argument('--out_pha', type=str,
                         default='./output/zsy/aug_zsy.pha')
     args = parser.parse_args()
-
-
-def preprocess(st):
-
-    # time alignment
-    start_time = max([tr.stats.starttime for tr in st])
-    end_time   = min([tr.stats.endtime   for tr in st])
-    st = st.slice(start_time, end_time)
-    # signal process
-    st = st.decimate(decim_rate)
-    st = st.detrend('demean').detrend('linear').taper(max_percentage=0.05)
-    flt_type = freq_band[0]
-    freqmin  = freq_band[1]
-    if len(freq_band)==2:
-        return st.filter(flt_type, freq=freqmin)
-    elif len(freq_band)==3:
-        freqmax = freq_band[2]
-        return st.filter(flt_type, freqmin=freqmin, freqmax=freqmax)
-
-
-# make temp dict: location + sta obs
-def get_temp_dict():
-
-  f=open(args.temp_pha); lines=f.readlines(); f.close()
-  temp_dict = {}
-  for line in lines:
-    info = line.split(',')
-    if len(info)==5:
-        temp_name = info[0]
-        ot   = UTCDateTime(temp_name)
-        lat  = float(info[1])
-        lon  = float(info[2])
-        dep  = float(info[3])
-        temp_loc = [ot, lat, lon, dep]
-        temp_dict[temp_name] = [temp_loc, {}]
-    else:
-        sta = info[0]
-        tp = UTCDateTime(info[1])
-        ts = UTCDateTime(info[2])
-        dt_ot = ot - tp + win_trig[0]
-        temp_dict[temp_name][1][sta] = [tp, ts, dt_ot]
-
-  print('read template data')
-  t=time.time()
-  for i,temp_name in enumerate(temp_dict):
-    if i%50==0: print(i,'th template', temp_name, int(time.time()-t),'s')
-    temp_lov  = temp_dict[temp_name][0]
-    [ot, lat, lon, dep] = temp_loc
-    temp_picks = temp_dict[temp_name][1]
-    for sta in temp_picks:
-        [tp, ts, dt_ot] = temp_dict[temp_name][1][sta]
-        temp_paths = os.path.join(args.temp_root, temp_name, '*.%s.*'%sta)
-        temp_paths = sorted(glob.glob(temp_paths))
-        temp = read(temp_paths[0])
-        temp+= read(temp_paths[1])
-        temp+= read(temp_paths[2])
-        temp = preprocess(temp)
-        if len(temp)!=3: continue
-        temp_trig = temp.slice(tp - win_trig[0], tp + win_trig[1])
-        temp_p    = temp.slice(tp - win_p[0], tp + win_p[1])
-        temp_s    = temp.slice(ts - win_s[0], ts + win_s[1])
-        temp_dict[temp_name][1][sta] = [temp_trig, temp_p, temp_s, tp, ts, ot, dt_ot]
-  return temp_dict
-
-
-# read continuous raw data and preprocess
-def read_data(data_dict):
-
-    print('read continuous data')
-    todel=[]
-    t=time.time()
-    for sta in data_dict:
-        print(sta, int(time.time()-t),'s')
-        if len(data_dict[sta])!=3:
-            todel.append(sta); continue
-        stream = read(data_dict[sta][0])
-        stream+= read(data_dict[sta][1])
-        stream+= read(data_dict[sta][2])
-        stream = preprocess(stream)
-        if len(stream)!=3:
-            todel.append(sta); continue
-        dt_st = stream[0].stats.starttime - date
-        data_dict[sta] = [stream, date, dt_st]
-    for sta in todel: data_dict.pop(sta)
-    return data_dict
-
 
 
 # MFT params
@@ -132,7 +47,7 @@ picker = pickers.Trad_PS()
 # i/o file
 out_ctlg = open(args.out_ctlg,'w')
 out_pha  = open(args.out_pha, 'w')
-temp_dict = get_temp_dict()
+temp_dict = get_temp_dict(args.temp_pha, args.temp_root)
 
 # get time range
 start_date = UTCDateTime(args.time_range.split(',')[0])
@@ -149,7 +64,7 @@ for day_idx in range(num_day):
     data_dict = dp.get_xj(args.data_dir, date)
     if data_dict=={}: continue
     # read data and preprocess
-    data_dict = read_data(data_dict)
+    data_dict = read_data(data_dict, date)
     print('-'*40)
     print('detecting %s'%date.date)
 
@@ -157,7 +72,7 @@ for day_idx in range(num_day):
     for temp_name in temp_dict:
 
         # init
-        t0=time.time()
+        t=time.time()
         temp_loc = temp_dict[temp_name][0]
         temp_picks = temp_dict[temp_name][1]
         print('-'*40)
@@ -172,7 +87,7 @@ for day_idx in range(num_day):
         cc_stack = np.sum(cc,axis=0) / len(cc)
 #        plt.plot(cc_stack); plt.show()
         det_ots = det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate)
-        print('{} detections | time {:.2f}'.format(len(det_ots), time.time()-t0))
+        print('{} detections | time {:.2f}'.format(len(det_ots), time.time()-t))
         if len(det_ots)==0: continue
 
         # ppk by cc
@@ -180,7 +95,7 @@ for day_idx in range(num_day):
             picksi = ppk_cc(det_oti, temp_picks, data_dict, 
                             win_p, win_s, picker, mask_len, samp_rate)
             write_det_ppk(det_oti, det_cci, temp_loc[1:], picksi, out_ctlg, out_pha)
-        print('time consumption: {:.2f}'.format(time.time()-t0))
+        print('time consumption: {:.2f}'.format(time.time()-t))
 
 out_ctlg.close()
 out_pha.close()
