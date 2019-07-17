@@ -1,5 +1,5 @@
 import os, sys, glob
-sys.path.append('/home/zhouyj/Documents/PpkDet')
+sys.path.append('/home/zhouyj/Xiaojiang/PpkDet')
 import argparse
 import time
 import numpy as np
@@ -61,7 +61,7 @@ for day_idx in range(num_day):
 
     # get data paths
     date = start_date + day_idx*86400
-    data_dict = dp.get_xj(args.data_dir, date)
+    data_dict = dp.get_ci(args.data_dir, date)
     if data_dict=={}: continue
     # read data and preprocess
     data_dict = read_data(data_dict, date)

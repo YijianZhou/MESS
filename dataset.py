@@ -63,6 +63,7 @@ def read_temp(temp_dir, temp_dict):
         temp_trig = stream.slice(tp - win_trig[0], tp + win_trig[1])
         temp_p    = stream.slice(tp - win_p[0], tp + win_p[1])
         temp_s    = stream.slice(ts - win_s[0], ts + win_s[1])
+        if len(temp_trig)!=3 or len(temp_s)!=3: continue
         temp = [temp_trig, temp_p, temp_s]
         temp = [st2np(tempi) for tempi in temp]
         norm_trig = [np.sqrt(np.sum(tri**2)) for tri in temp[0]]
@@ -97,7 +98,7 @@ def get_temp_dict(temp_pha, temp_root):
         temp_dict[temp_name][1][sta] = [tp, ts, dt_ot]
 
     # read temp data
-    pool = Pool(processes=20)
+    pool = Pool(processes=10)
     temp_dirs = glob.glob(os.path.join(temp_root,'*'))
     num_temp = len(temp_dirs)
     print('read template data')

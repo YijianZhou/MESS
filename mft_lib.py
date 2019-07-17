@@ -18,8 +18,10 @@ def calc_cc(data, temp, **kwargs):
     if ntemp>ndata: return [0]
     if 'norm_temp' in kwargs: norm_temp = kwargs['norm_temp']
     else: norm_temp = np.sqrt(np.sum(temp**2))
-    if 'norm_data' in kwargs: norm_data = kwargs['norm_data']
-    else:
+    if 'norm_data' in kwargs: 
+        norm_data = kwargs['norm_data']
+    if 'norm_data' not in kwargs\
+    or len(norm_data)!=ndata-ntemp:
         data_cum = np.cumsum(data**2)
         norm_data = np.sqrt(data_cum[ntemp:] - data_cum[:-ntemp])
     cc = correlate(data, temp, mode='valid')
