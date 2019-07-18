@@ -75,7 +75,7 @@ def calc_shifted_cc(temp_trig, stream, norm_temp, norm_data, dt, samp_rate):
     cci_holder = np.zeros(int(86400*samp_rate))
     dt = int(samp_rate * dt)
     cci = cci[max(0,-dt) : max(0,-dt) + len(cci)]
-    cci_holder[max(0,dt) : max(0,dt) + len(cci)] = cci
+    cci_holder[max(0,dt) : max(0,dt) + len(cci)] = cci[0:len(cci_holder)-max(0,dt)]
     return cci_holder
 
 
