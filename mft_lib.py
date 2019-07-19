@@ -98,7 +98,7 @@ def mask_cc(cci, trig_thres, mask_len):
     cci[mask_idx0 : mask_idx1] = cc_max
 
     # next trig
-    slide_idx = trig_idx + mask_len
+    slide_idx = idx_max + 2*mask_len
     if slide_idx > trig_idxs[-1]: break
   return cci, num
 
@@ -124,7 +124,7 @@ def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
     print('detection: ', det_oti, round(cc_max,2))
 
     # next detection
-    slide_idx = det_idx + 2*mask_len
+    slide_idx = idx_max + 2*mask_len
     if slide_idx > det_idxs[-1]: break
   return det_ots
 
