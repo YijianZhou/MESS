@@ -84,13 +84,13 @@ def mask_cc(cci, trig_thres, mask_len):
 
   # cc mask
   trig_idxs = np.where(cci > trig_thres)[0]
-  slide_idx = 0
+  slide_idx = -1
   num=0
   for _ in trig_idxs:
     num+=1
 
     # mask cci with max cc
-    trig_idx = trig_idxs[trig_idxs >= slide_idx][0]
+    trig_idx = trig_idxs[trig_idxs > slide_idx][0]
     cc_max = np.amax(cci[trig_idx : trig_idx + mask_len])
     idx_max = np.argmax(cci[trig_idx : trig_idx + mask_len]) + trig_idx
     mask_idx0 = max(0, idx_max - mask_len //2)
@@ -98,7 +98,7 @@ def mask_cc(cci, trig_thres, mask_len):
     cci[mask_idx0 : mask_idx1] = cc_max
 
     # next trig
-    slide_idx = idx_max + 2*mask_len
+    slide_idx = trig_idx + idx_max + 2*mask_len
     if slide_idx > trig_idxs[-1]: break
   return cci, num
 
@@ -107,12 +107,12 @@ def mask_cc(cci, trig_thres, mask_len):
 def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
 
   det_idxs = np.where(cc_stack > trig_thres)[0]
-  slide_idx = 0
+  slide_idx = -1
   det_ots = []
   for _ in det_idxs:
 
     # this detection
-    det_idx = det_idxs[det_idxs >= slide_idx][0]
+    det_idx = det_idxs[det_idxs > slide_idx][0]
     if det_idx + 2*mask_len > len(cc_stack)-1: break
 
     # pick ot
@@ -124,7 +124,7 @@ def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
     print('detection: ', det_oti, round(cc_max,2))
 
     # next detection
-    slide_idx = idx_max + 2*mask_len
+    slide_idx = det_idx + idx_max + 2*mask_len
     if slide_idx > det_idxs[-1]: break
   return det_ots
 
