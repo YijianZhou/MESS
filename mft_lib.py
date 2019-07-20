@@ -1,5 +1,4 @@
 from scipy.signal import correlate
-from multiprocessing import Pool
 import numpy as np
 import time
 
@@ -18,7 +17,7 @@ def calc_cc(data, temp, **kwargs):
     if ntemp>ndata: return [0]
     if 'norm_temp' in kwargs: norm_temp = kwargs['norm_temp']
     else: norm_temp = np.sqrt(np.sum(temp**2))
-    if 'norm_data' in kwargs: 
+    if 'norm_data' in kwargs:
         norm_data = kwargs['norm_data']
     if 'norm_data' not in kwargs\
     or len(norm_data)!=ndata-ntemp:
@@ -31,34 +30,22 @@ def calc_cc(data, temp, **kwargs):
     return cc
 
 
-def calc_masked_cci(temp, stream, norm_temp, norm_data, dt, samp_rate, trig_thres, mask_len):
-    # calc shifted cc trace
-    cci = calc_shifted_cc(temp, stream, norm_temp, norm_data, dt, samp_rate)
-    # calc masked cc trace & ppk
-    cci, num = mask_cc(cci, trig_thres, mask_len)
-    return [cci, num]
-
-
 def calc_masked_cc(temp_picks, data_dict, trig_thres, mask_len, samp_rate):
 
     t=time.time()
-    out = []
-    pool = Pool(processes=len(temp_picks))
+    cc = []
+    for sta, [temp, norm_temp,  _, _, _, dt_ot] in temp_picks.items():
 
-    for sta, [temp, norm_temp, _, _, _, dt_ot] in temp_picks.items():
         # get data
         if sta not in data_dict: continue
         [stream, norm_data, date, dt_st] = data_dict[sta]
-        # process a station
-        outi = pool.apply_async(calc_masked_cci, 
-                          args=(temp[0], stream, norm_temp[0], norm_data,
-                                dt_st + dt_ot, samp_rate, trig_thres, mask_len))
-        out.append([sta, outi])
-    pool.close()
-    pool.join()
-    for [sta, outi] in out: print('{} {} trigs'.format(sta, outi.get()[1]))
-    cc = [outi.get()[0] for [_, outi] in out]
-    print('process {} stations | time {:.2f}'.format(len(temp_picks), time.time()-t))
+        # calc shifted cc trace
+        cci = calc_shifted_cc(temp[0], stream,  norm_temp[0], norm_data, dt_st + dt_ot, samp_rate)
+        # calc masked cc trace & ppk
+        cci, num = mask_cc(cci, trig_thres, mask_len)
+        cc.append(cci)
+        print('{} process {} trigs | time {:.2f}'.format(sta, num, time.time()-t))
+
     return cc
 
 
@@ -84,21 +71,21 @@ def mask_cc(cci, trig_thres, mask_len):
 
   # cc mask
   trig_idxs = np.where(cci > trig_thres)[0]
-  slide_idx = -1
+  slide_idx = 0
   num=0
   for _ in trig_idxs:
     num+=1
 
     # mask cci with max cc
-    trig_idx = trig_idxs[trig_idxs > slide_idx][0]
+    trig_idx = trig_idxs[trig_idxs >= slide_idx][0]
     cc_max = np.amax(cci[trig_idx : trig_idx + mask_len])
-    idx_max = np.argmax(cci[trig_idx : trig_idx + mask_len]) + trig_idx
+    idx_max = np.argmax(cci[trig_idx : trig_idx + mask_len]) + trig_idx # abs idx
     mask_idx0 = max(0, idx_max - mask_len //2)
     mask_idx1 = idx_max + mask_len//2
     cci[mask_idx0 : mask_idx1] = cc_max
 
     # next trig
-    slide_idx = trig_idx + idx_max + 2*mask_len
+    slide_idx = idx_max + 2*mask_len
     if slide_idx > trig_idxs[-1]: break
   return cci, num
 
@@ -118,13 +105,13 @@ def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
     # pick ot
     cc_max  = np.amax(cc_stack[det_idx : det_idx + 2*mask_len])
     idx_max = np.where(cc_stack[det_idx: det_idx + 2*mask_len] == cc_max)
-    idx_max = int(np.median(idx_max))
-    det_oti = date + (det_idx + idx_max) / samp_rate
+    idx_max = int(np.median(idx_max)) + det_idx # to abs idx
+    det_oti = date + idx_max / samp_rate
     det_ots.append([det_oti, cc_max])
     print('detection: ', det_oti, round(cc_max,2))
 
     # next detection
-    slide_idx = det_idx + idx_max + 2*mask_len
+    slide_idx = idx_max + 2*mask_len
     if slide_idx > det_idxs[-1]: break
   return det_ots
 
