@@ -15,7 +15,6 @@ win_p = cfg.win_p
 win_s = cfg.win_s
 npts_trig = int(sum(win_trig) * samp_rate) + 1
 temp_win = [int(sum(win) * samp_rate) + 1 for win in [win_trig, win_p, win_s]]
-gpu_idx = cfg.gpu_idx
 
 def preprocess(st):
 
@@ -43,7 +42,7 @@ def read_stream(stream_paths):
 
 
 def np2cuda(data):
-    return torch.from_numpy(data).cuda(gpu_idx)
+    return torch.from_numpy(data).cuda()
 
 def st2np(stream):
     return np.array([stream[0].data, stream[1].data, stream[2].data])
