@@ -18,6 +18,7 @@ import torch.multiprocessing as mp
 import torch
 mp.set_sharing_strategy('file_system')
 torch.cuda.empty_cache()
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 if __name__ == '__main__':
   mp.set_start_method('spawn')
