@@ -17,7 +17,6 @@ npts_trig = int(sum(win_trig) * samp_rate) + 1
 temp_win = [int(sum(win) * samp_rate) + 1 for win in [win_trig, win_p, win_s]]
 
 def preprocess(st):
-
     # time alignment
     start_time = max([tr.stats.starttime for tr in st])
     end_time   = min([tr.stats.endtime   for tr in st])
@@ -81,7 +80,7 @@ class Templates(Dataset):
         temp_trig = stream.slice(tp - win_trig[0], tp + win_trig[1])
         temp_p    = stream.slice(tp - win_p[0], tp + win_p[1])
         temp_s    = stream.slice(ts - win_s[0], ts + win_s[1])
-        temp = [st2np(temp_trig), st2np(temp_p), st2np(temp_s)]
+        temp = [st2np(tempi) for tempi in [temp_trig, temp_p, temp_s]]
         for i,tempi in enumerate(temp):
             if len(tempi[0]) != temp_win[i]: is_bad = True
         if is_bad: continue

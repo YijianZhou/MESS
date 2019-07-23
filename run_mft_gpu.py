@@ -8,8 +8,8 @@ from obspy import read, UTCDateTime
 import data_pipeline as dp
 import pickers
 # import MFT functions
-from dataset_gpu import get_temp_dict, read_data
-from mft_lib_gpu import *
+from dataset_gpu_torch import get_temp_dict, read_data
+from mft_lib_gpu_torch import *
 import config
 import warnings
 warnings.filterwarnings("ignore")
@@ -18,7 +18,7 @@ import torch.multiprocessing as mp
 import torch
 mp.set_sharing_strategy('file_system')
 torch.cuda.empty_cache()
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 if __name__ == '__main__':
   mp.set_start_method('spawn')

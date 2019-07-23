@@ -6,7 +6,10 @@ import numpy as np
 import time
 
 def calc_cc_gpu(data_mat, temp_mat, norm_data_mat, norm_temp_vec):
-
+    """ Cala CC trace by GPU cuda
+    Inputs
+        cuda tensor
+    """
     num_sta, len_data = data_mat.shape
     _, len_temp = temp_mat.shape
     data_mat = data_mat.view([1, num_sta, len_data])
@@ -19,7 +22,6 @@ def calc_cc_gpu(data_mat, temp_mat, norm_data_mat, norm_temp_vec):
 
 
 def calc_cc(data, temp, **kwargs):
-
     """ Calc CC trace for a template trace
     Input
         data: continuous data to detect from, np.array
@@ -94,7 +96,6 @@ def calc_shifted_cc(data_list, temp_list, dt_list, samp_rate):
     cc /= 3.
 
     # time shift to ot
-    cc_out = []
     cc_holder = torch.zeros([len(dt_list), int(86400*samp_rate)])
     for i,dt in enumerate(dt_list):
         cci = cc[i]
@@ -109,22 +110,20 @@ def mask_cc(cci, trig_thres, mask_len):
 
   # cc mask
   trig_idxs = np.where(cci > trig_thres)[0]
-  slide_idx = -1
-  num=0
-  for _ in trig_idxs:
-    num+=1
+  slide_idx = 0
+  for num,_ in enumerate(trig_idxs):
 
     # mask cci with max cc
-    trig_idx = trig_idxs[trig_idxs > slide_idx][0]
+    trig_idx = trig_idxs[trig_idxs >= slide_idx][0]
     cc_max = np.amax(cci[trig_idx : trig_idx + mask_len])
-    idx_max = np.argmax(cci[trig_idx : trig_idx + mask_len]) + trig_idx
+    idx_max = np.argmax(cci[trig_idx : trig_idx + mask_len]) + trig_idx # abs idx
     mask_idx0 = max(0, idx_max - mask_len //2)
     mask_idx1 = idx_max + mask_len//2
     cci[mask_idx0 : mask_idx1] = cc_max
 
     # next trig
     slide_idx = idx_max + 2*mask_len
-    if slide_idx >= trig_idxs[-1]: break
+    if slide_idx > trig_idxs[-1]: break
   return cci, num
 
 
@@ -132,25 +131,25 @@ def mask_cc(cci, trig_thres, mask_len):
 def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
 
   det_idxs = np.where(cc_stack > trig_thres)[0]
-  slide_idx = -1
+  slide_idx = 0
   det_ots = []
   for _ in det_idxs:
 
     # this detection
-    det_idx = det_idxs[det_idxs > slide_idx][0]
+    det_idx = det_idxs[det_idxs >= slide_idx][0]
     if det_idx + 2*mask_len > len(cc_stack)-1: break
 
     # pick ot
     cc_max  = np.amax(cc_stack[det_idx : det_idx + 2*mask_len])
     idx_max = np.where(cc_stack[det_idx: det_idx + 2*mask_len] == cc_max)
-    idx_max = int(np.median(idx_max)) + det_idx
-    det_oti = date + (det_idx + idx_max) / samp_rate
+    idx_max = int(np.median(idx_max)) + det_idx # to abs idx
+    det_oti = date + idx_max / samp_rate
     det_ots.append([det_oti, cc_max])
     print('detection: ', det_oti, round(cc_max,2))
 
     # next detection
     slide_idx = idx_max + 2*mask_len
-    if slide_idx >= det_idxs[-1]: break
+    if slide_idx > det_idxs[-1]: break
   return det_ots
 
 
@@ -165,28 +164,30 @@ def ppk_cc(det_oti, temp_picks, data_dict,
     if sta not in data_dict: continue
     [st_tensor, _, _, date] = data_dict[sta]
 
-    tpi0 = int(samp_rate * (det_oti + (tp-ot) - date))
-    tsi0 = int(samp_rate * (det_oti + (ts-ot) - date))
+    # org tpi & tsi idx
+    tpi0_idx = int(samp_rate * (det_oti + (tp-ot) - date))
+    tsi0_idx = int(samp_rate * (det_oti + (ts-ot) - date))
 
     # cut p&s data (by points)
     p_rng = [int(win_p[0] * samp_rate) +   mask_len,
              int(win_p[1] * samp_rate) +   mask_len]
     s_rng = [int(win_s[0] * samp_rate) + 2*mask_len,
              int(win_s[1] * samp_rate) + 2*mask_len]
-    if tpi0<p_rng[0] or tsi0<s_rng[0]\
-    or tsi0+s_rng[1] > st_tensor.shape[-1]: continue
-    st_p = st_tensor[0,:, tpi0-p_rng[0] : tpi0+p_rng[1]].numpy()
-    st_s = st_tensor[0,:, tsi0-s_rng[0] : tsi0+s_rng[1]].numpy()
+    if tpi0_idx<p_rng[0] or tsi0_idx<s_rng[0]\
+    or tsi0_idx+s_rng[1] > st_tensor.shape[-1]: continue
+    st_p = st_tensor[0,:, tpi0_idx - p_rng[0] : tpi0_idx + p_rng[1]].numpy()
+    st_s = st_tensor[0,:, tsi0_idx - s_rng[0] : tsi0_idx + s_rng[1]].numpy()
 
     # ppk by cc
     temp_p, temp_s = temp[1][0].numpy(), temp[2][0].numpy()
     cc_p  = calc_cc(st_p[2], temp_p[2], norm_temp=norm_temp[1][2].numpy())
     cc_s0 = calc_cc(st_s[0], temp_s[0], norm_temp=norm_temp[2][0].numpy())
     cc_s1 = calc_cc(st_s[1], temp_s[1], norm_temp=norm_temp[2][1].numpy())
-    tpi = tpi0 - p_rng[0] + np.argmax(cc_p) + win_p[0]*samp_rate
-    tsi = tsi0 - s_rng[0] + (np.argmax(cc_s0) + np.argmax(cc_s1))/2. + win_s[0]*samp_rate
-    tpi = date + tpi / samp_rate
-    tsi = date + tsi / samp_rate
+    # tpi & tsi idx
+    tpi_idx = tpi0_idx + np.argmax(cc_p) - mask_len
+    tsi_idx = tsi0_idx + (np.argmax(cc_s0) + np.argmax(cc_s1))/2. - 2*mask_len
+    tpi = date + tpi_idx / samp_rate
+    tsi = date + tsi_idx / samp_rate
     cc_p_max = np.amax(cc_p)
     cc_s_max = (np.amax(cc_s0) + np.amax(cc_s1)) / 2.
 
