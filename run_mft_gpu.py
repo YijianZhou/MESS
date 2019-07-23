@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 import torch.multiprocessing as mp
 import torch
 mp.set_sharing_strategy('file_system')
-torch.cuda.empty_cache()
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 if __name__ == '__main__':
@@ -79,6 +78,7 @@ if __name__ == '__main__':
 
         # init
         t=time.time()
+        torch.cuda.empty_cache()
         temp_loc = temp_dict[temp_name][0]
         temp_picks = temp_dict[temp_name][1]
         print('-'*40)
