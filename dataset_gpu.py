@@ -44,11 +44,17 @@ def read_stream(stream_paths):
 def np2cuda(data):
     return torch.from_numpy(data).cuda()
 
+def np2tensor(data):
+    return torch.unsqueeze(torch.from_numpy(data),0)
+
 def st2np(stream):
     return np.array([stream[0].data, stream[1].data, stream[2].data])
 
 def st2cuda(stream):
     return np2cuda(st2np(stream))
+
+def st2tensor(stream):
+    return np2tensor(st2np(stream))
 
 
 class Templates(Dataset):
@@ -68,18 +74,18 @@ class Templates(Dataset):
     temp_paths = glob.glob(os.path.join(temp_dir,'*.*Z'))
     for temp_path in temp_paths:
         is_bad = False
-        net, sta, _ = os.path.split(temp_path)[-1].split('.')
+        _, sta, _ = os.path.split(temp_path)[-1].split('.')
         [tp, ts, _] = self.temp_dict[temp_name][1][sta]
-        stream_paths = sorted(glob.glob(os.path.join(temp_dir, '%s.%s.*'%(net,sta))))
+        stream_paths = sorted(glob.glob(os.path.join(temp_dir, '*.%s.*'%sta)))
         stream = read_stream(stream_paths)
         temp_trig = stream.slice(tp - win_trig[0], tp + win_trig[1])
         temp_p    = stream.slice(tp - win_p[0], tp + win_p[1])
         temp_s    = stream.slice(ts - win_s[0], ts + win_s[1])
-        temp = [st2cuda(temp_trig), st2np(temp_p), st2np(temp_s)]
+        temp = [st2np(temp_trig), st2np(temp_p), st2np(temp_s)]
         for i,tempi in enumerate(temp):
             if len(tempi[0]) != temp_win[i]: is_bad = True
         if is_bad: continue
-        norm_trig = [torch.sqrt(torch.sum(tri**2)) for tri in temp[0]]
+        norm_trig = [np.sqrt(np.sum(tri**2)) for tri in temp[0]]
         norm_p    = [np.sqrt(np.sum(tri**2)) for tri in temp[1]]
         norm_s    = [np.sqrt(np.sum(tri**2)) for tri in temp[2]]
         norm_temp = [norm_trig, norm_p, norm_s]
@@ -89,6 +95,39 @@ class Templates(Dataset):
 
   def __len__(self):
     return len(self.temp_dirs)
+
+
+class Data(Dataset):
+
+  def __init__(self, data_dict, date):
+    """ Dataset for reading Continuous Data
+    """
+    self.data_dict = data_dict
+    self.sta_list = list(data_dict.keys())
+    self.date = date
+
+  def __getitem__(self, index):
+    # read one station
+    sta = self.sta_list[index]
+    # read data
+    stream_paths = self.data_dict[sta]
+    stream = read_stream(stream_paths)
+    dt_st = stream[0].stats.starttime - self.date
+
+    # get stream data (np.array)
+    st_holder = np.zeros([3,int(86400*samp_rate+1)])
+    st_np = st2np(stream.slice(self.date, self.date + 86400))
+    idx0 = int(dt_st * samp_rate)
+    idx1 = int(idx0 + st_np.shape[1])
+    st_holder[:, idx0:idx1] = st_np
+    st_np = st_holder
+    # calc norm data (for corr)
+    data_cum = [np.cumsum(datai**2) for datai in st_np]
+    norm_data = [np.sqrt(cumi[npts_trig:] - cumi[:-npts_trig]) for cumi in data_cum]
+    return sta, [st_np, norm_data, dt_st]
+
+  def __len__(self):
+    return len(self.sta_list)
 
 
 """ Read Template Data
@@ -129,7 +168,7 @@ def get_temp_dict(temp_pha, temp_root):
     t=time.time()
     todel = []
     temp_dataset = Templates(temp_root, temp_dict)
-    temp_loader = DataLoader(temp_dataset, num_workers=10)
+    temp_loader = DataLoader(temp_dataset, num_workers=10, pin_memory=True)
     for i, (temp_name, out_dict) in enumerate(temp_loader):
         temp_name = temp_name[0]
         if len(out_dict)<4: todel.append(temp_name)
@@ -148,6 +187,17 @@ def get_temp_dict(temp_pha, temp_root):
     data_dict: data_dict[sta] = stream_paths
 """
 
+def read_data(data_dict, date):
+    t=time.time()
+    print('read continuous data')
+    data_dataset = Data(data_dict, date)
+    data_loader = DataLoader(data_dataset, num_workers=10, pin_memory=True)
+    for i, (sta, outi) in enumerate(data_loader):
+        data_dict[sta[0]] = outi + [date]
+        print('read {} | time {:.1f}s'.format(sta[0], time.time()-t))
+    return data_dict
+
+"""
 def get_sta_data(data_paths, date):
     stream = read_stream(data_paths)
     dt_st = stream[0].stats.starttime - date
@@ -158,12 +208,12 @@ def get_sta_data(data_paths, date):
     idx1 = int(idx0 + st_np.shape[1])
     st_holder[:, idx0:idx1] = st_np
     st_np = st_holder
-    st_cuda = torch.unsqueeze(np2cuda(st_np),0)
+    st_tensor = np2tensor(st_np)
     # calc norm data (for corr)
     data_cum = [np.cumsum(datai**2) for datai in st_np]
     norm_data = [np.sqrt(cumi[npts_trig:] - cumi[:-npts_trig]) for cumi in data_cum]
-    norm_data = [torch.unsqueeze(np2cuda(normi),0) for normi in norm_data]
-    return [[stream, st_cuda], norm_data, date, dt_st]
+    norm_data = [np2tensor(normi) for normi in norm_data]
+    return [[stream, st_tensor], norm_data, date, dt_st]
 
 
 # read continuous raw data and preprocess
@@ -175,4 +225,4 @@ def read_data(data_dict, date):
         data_dict[sta] = get_sta_data(data_dict[sta], date)
         print('Read {} | time: {:.1f}s'.format(sta, time.time()-t))
     return data_dict
-
+"""

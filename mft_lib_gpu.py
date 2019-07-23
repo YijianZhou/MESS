@@ -52,13 +52,12 @@ def calc_masked_cc(temp_picks, data_dict, trig_thres, mask_len, samp_rate):
     for sta, [temp, norm_temp, _, _, _, dt_ot] in temp_picks.items():
         # get data
         if sta not in data_dict: continue
-        [[_, st_cuda], norm_data, date, dt_st] = data_dict[sta]
-        data_list.append([st_cuda, norm_data])
+        [st_tensor, norm_data, dt_st, _] = data_dict[sta]
+        data_list.append([st_tensor, norm_data])
         temp_list.append([temp[0], norm_temp[0]])
         dt_list.append(dt_st+dt_ot)
     cc = calc_shifted_cc(data_list, temp_list, dt_list, samp_rate)
     cc = cc.cpu().numpy()
-
     # 2. mask cc traces
     cc_masked = []
     for cci in cc:
@@ -69,24 +68,24 @@ def calc_masked_cc(temp_picks, data_dict, trig_thres, mask_len, samp_rate):
 
 
 # 1. calc cc trace & time shift
-def calc_shifted_cc(st_cuda_list, temp_list, dt_list, samp_rate):
+def calc_shifted_cc(data_list, temp_list, dt_list, samp_rate):
 
     # data_mat
-    st_mat_e = torch.cat([datai[:,0] for [datai,_] in st_cuda_list])
-    st_mat_n = torch.cat([datai[:,1] for [datai,_] in st_cuda_list])
-    st_mat_z = torch.cat([datai[:,2] for [datai,_] in st_cuda_list])
+    st_mat_e = torch.cat([datai[:,0] for [datai,_] in data_list]).cuda()
+    st_mat_n = torch.cat([datai[:,1] for [datai,_] in data_list]).cuda()
+    st_mat_z = torch.cat([datai[:,2] for [datai,_] in data_list]).cuda()
     # temp_mat
-    temp_mat_e = torch.cat([tempi[:,0] for [tempi,_] in temp_list])
-    temp_mat_n = torch.cat([tempi[:,1] for [tempi,_] in temp_list])
-    temp_mat_z = torch.cat([tempi[:,2] for [tempi,_] in temp_list])
+    temp_mat_e = torch.cat([tempi[:,0] for [tempi,_] in temp_list]).cuda()
+    temp_mat_n = torch.cat([tempi[:,1] for [tempi,_] in temp_list]).cuda()
+    temp_mat_z = torch.cat([tempi[:,2] for [tempi,_] in temp_list]).cuda()
     # norm_data mat
-    norm_data_e = torch.cat([normi[0] for [_,normi] in st_cuda_list])
-    norm_data_n = torch.cat([normi[1] for [_,normi] in st_cuda_list])
-    norm_data_z = torch.cat([normi[2] for [_,normi] in st_cuda_list])
+    norm_data_e = torch.cat([normi[0] for [_,normi] in data_list]).cuda()
+    norm_data_n = torch.cat([normi[1] for [_,normi] in data_list]).cuda()
+    norm_data_z = torch.cat([normi[2] for [_,normi] in data_list]).cuda()
     # norm_temp vec
-    norm_temp_e = torch.cat([normi[0] for [_,normi] in temp_list])
-    norm_temp_n = torch.cat([normi[1] for [_,normi] in temp_list])
-    norm_temp_z = torch.cat([normi[2] for [_,normi] in temp_list])
+    norm_temp_e = torch.tensor([normi[0] for [_,normi] in temp_list]).cuda()
+    norm_temp_n = torch.tensor([normi[1] for [_,normi] in temp_list]).cuda()
+    norm_temp_z = torch.tensor([normi[2] for [_,normi] in temp_list]).cuda()
 
     # calc cc traces (mat) with GPU
     cc  = calc_cc_gpu(st_mat_e, temp_mat_e, norm_data_e, norm_temp_e)
@@ -124,9 +123,8 @@ def mask_cc(cci, trig_thres, mask_len):
     cci[mask_idx0 : mask_idx1] = cc_max
 
     # next trig
-    slide_idx = trig_idx + idx_max + 2*mask_len
-    if slide_idx > trig_idxs[-1]: break
-
+    slide_idx = idx_max + 2*mask_len
+    if slide_idx >= trig_idxs[-1]: break
   return cci, num
 
 
@@ -145,14 +143,14 @@ def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
     # pick ot
     cc_max  = np.amax(cc_stack[det_idx : det_idx + 2*mask_len])
     idx_max = np.where(cc_stack[det_idx: det_idx + 2*mask_len] == cc_max)
-    idx_max = int(np.median(idx_max))
+    idx_max = int(np.median(idx_max)) + det_idx
     det_oti = date + (det_idx + idx_max) / samp_rate
     det_ots.append([det_oti, cc_max])
     print('detection: ', det_oti, round(cc_max,2))
 
     # next detection
-    slide_idx = det_idx + idx_max + 2*mask_len
-    if slide_idx > det_idxs[-1]: break
+    slide_idx = idx_max + 2*mask_len
+    if slide_idx >= det_idxs[-1]: break
   return det_ots
 
 
@@ -165,34 +163,37 @@ def ppk_cc(det_oti, temp_picks, data_dict,
 
     # get data
     if sta not in data_dict: continue
-    [[stream, _], _, _, dt_st] = data_dict[sta]
+    [st_tensor, _, _, date] = data_dict[sta]
 
-    tpi0 = det_oti + (tp - ot)
-    tsi0 = det_oti + (ts - ot)
+    tpi0 = int(samp_rate * (det_oti + (tp-ot) - date))
+    tsi0 = int(samp_rate * (det_oti + (ts-ot) - date))
 
-    # cut p&s data
-    p_rng = [win_p[0] +   mask_len / samp_rate,
-             win_p[1] +   mask_len / samp_rate]
-    s_rng = [win_s[0] + 2*mask_len / samp_rate,
-             win_s[1] + 2*mask_len / samp_rate]
-    st_p = stream.slice(tpi0 - p_rng[0], tpi0 + p_rng[1])
-    st_s = stream.slice(tsi0 - s_rng[0], tsi0 + s_rng[1])
-    if len(st_p)!=3 or len(st_s)!=3: break
+    # cut p&s data (by points)
+    p_rng = [int(win_p[0] * samp_rate) +   mask_len,
+             int(win_p[1] * samp_rate) +   mask_len]
+    s_rng = [int(win_s[0] * samp_rate) + 2*mask_len,
+             int(win_s[1] * samp_rate) + 2*mask_len]
+    if tpi0<p_rng[0] or tsi0<s_rng[0]\
+    or tsi0+s_rng[1] > st_tensor.shape[-1]: continue
+    st_p = st_tensor[0,:, tpi0-p_rng[0] : tpi0+p_rng[1]].numpy()
+    st_s = st_tensor[0,:, tsi0-s_rng[0] : tsi0+s_rng[1]].numpy()
 
     # ppk by cc
     temp_p, temp_s = temp[1][0].numpy(), temp[2][0].numpy()
-    cc_p  = calc_cc(st_p[2].data, temp_p[2], norm_temp=norm_temp[1][2].numpy())
-    cc_s0 = calc_cc(st_s[0].data, temp_s[0], norm_temp=norm_temp[2][0].numpy())
-    cc_s1 = calc_cc(st_s[1].data, temp_s[1], norm_temp=norm_temp[2][1].numpy())
-    tpi = tpi0 - p_rng[0] + win_p[0] + np.argmax(cc_p) / samp_rate
-    tsi = tsi0 - s_rng[0] + win_s[0] + (np.argmax(cc_s0) + np.argmax(cc_s1)) / samp_rate / 2.
+    cc_p  = calc_cc(st_p[2], temp_p[2], norm_temp=norm_temp[1][2].numpy())
+    cc_s0 = calc_cc(st_s[0], temp_s[0], norm_temp=norm_temp[2][0].numpy())
+    cc_s1 = calc_cc(st_s[1], temp_s[1], norm_temp=norm_temp[2][1].numpy())
+    tpi = tpi0 - p_rng[0] + np.argmax(cc_p) + win_p[0]*samp_rate
+    tsi = tsi0 - s_rng[0] + (np.argmax(cc_s0) + np.argmax(cc_s1))/2. + win_s[0]*samp_rate
+    tpi = date + tpi / samp_rate
+    tsi = date + tsi / samp_rate
     cc_p_max = np.amax(cc_p)
     cc_s_max = (np.amax(cc_s0) + np.amax(cc_s1)) / 2.
 
     # get S amplitude
-    ampx = picker.get_amp(st_s[0].data)
-    ampy = picker.get_amp(st_s[1].data)
-    ampz = picker.get_amp(st_s[2].data)
+    ampx = picker.get_amp(st_s[0])
+    ampy = picker.get_amp(st_s[1])
+    ampz = picker.get_amp(st_s[2])
     s_amp = np.sqrt(ampx**2 + ampy**2 + ampz**2)
 
     # add pick
