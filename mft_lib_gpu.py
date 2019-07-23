@@ -111,12 +111,15 @@ def mask_cc(cci, trig_thres, mask_len):
   # cc mask
   trig_idxs = np.where(cci > trig_thres)[0]
   slide_idx = 0
-  for num,_ in enumerate(trig_idxs):
+  num = 0
+  for _ in trig_idxs:
+    num += 1
 
     # mask cci with max cc
     trig_idx = trig_idxs[trig_idxs >= slide_idx][0]
     cc_max = np.amax(cci[trig_idx : trig_idx + mask_len])
-    idx_max = np.argmax(cci[trig_idx : trig_idx + mask_len]) + trig_idx # abs idx
+    idx_max = np.argmax(cci[trig_idx : trig_idx + mask_len])
+    idx_max += trig_idx # to abs idx
     mask_idx0 = max(0, idx_max - mask_len //2)
     mask_idx1 = idx_max + mask_len//2
     cci[mask_idx0 : mask_idx1] = cc_max
