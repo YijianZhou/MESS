@@ -16,17 +16,16 @@ win_s = cfg.win_s
 npts_trig = int(sum(win_trig) * samp_rate) + 1
 temp_win = [int(sum(win) * samp_rate) + 1 for win in [win_trig, win_p, win_s]]
 
-def preprocess(st, add_taper=True):
+def preprocess(st):
     # time alignment
     start_time = max([tr.stats.starttime for tr in st])
     end_time   = min([tr.stats.endtime   for tr in st])
     st = st.slice(start_time, end_time)
     # signal process
     st = st.decimate(decim_rate)
-    st = st.detrend('demean').detrend('linear')
+    st = st.detrend('demean').detrend('linear').taper(max_percentage=0.05, max_length=10.)
     flt_type = freq_band[0]
     freqmin  = freq_band[1]
-    if add_taper: st = st.taper(max_percentage=0.05)
     if len(freq_band)==2:
         return st.filter(flt_type, freq=freqmin)
     elif len(freq_band)==3:
@@ -111,7 +110,7 @@ class Data(Dataset):
     sta = self.sta_list[index]
     # read data
     stream_paths = self.data_dict[sta]
-    stream = preprocess(read_stream(stream_paths), add_taper=False)
+    stream = preprocess(read_stream(stream_paths))
     dt_st = stream[0].stats.starttime - self.date
 
     # get stream data (np.array)
