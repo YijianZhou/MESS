@@ -196,33 +196,3 @@ def read_data(data_dict, date):
         data_dict[sta[0]] = outi + [date]
         print('read {} | time {:.1f}s'.format(sta[0], time.time()-t))
     return data_dict
-
-"""
-def get_sta_data(data_paths, date):
-    stream = read_stream(data_paths)
-    dt_st = stream[0].stats.starttime - date
-    # get stream data (np.array)
-    st_holder = np.zeros([3,int(86400*samp_rate+1)])
-    st_np = st2np(stream.slice(date, date + 86400))
-    idx0 = int(dt_st * samp_rate)
-    idx1 = int(idx0 + st_np.shape[1])
-    st_holder[:, idx0:idx1] = st_np
-    st_np = st_holder
-    st_tensor = np2tensor(st_np)
-    # calc norm data (for corr)
-    data_cum = [np.cumsum(datai**2) for datai in st_np]
-    norm_data = [np.sqrt(cumi[npts_trig:] - cumi[:-npts_trig]) for cumi in data_cum]
-    norm_data = [np2tensor(normi) for normi in norm_data]
-    return [[stream, st_tensor], norm_data, date, dt_st]
-
-
-# read continuous raw data and preprocess
-def read_data(data_dict, date):
-    t=time.time()
-    print('read continuous data')
-    num_sta = len(data_dict)
-    for sta in data_dict:
-        data_dict[sta] = get_sta_data(data_dict[sta], date)
-        print('Read {} | time: {:.1f}s'.format(sta, time.time()-t))
-    return data_dict
-"""
