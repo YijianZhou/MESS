@@ -4,7 +4,7 @@ from obspy import UTCDateTime
 import numpy as np
 import time
 import argparse
-# import PpkDet
+# import PAD
 import detectors
 import data_pipeline as dp
 
