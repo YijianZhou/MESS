@@ -13,11 +13,10 @@ for i in range(num_proc):
     write_temp = 1 if i==0 else 0
     name_tag = '{}_{}'.format(t0,t1)
     start_id = 100000 * (i+1)
-    os.system("python mk_dt.py \
+    os.system("python mk_pha.py \
         --time_range={},{} \
-        --out_dt=./input2/dt_{} \
-        --out_ctlg=./input2/event_{} \
+        --out_pha=./input2/pha_{} \
         --write_temp={} \
         --start_id={} &"\
-        .format(t0, t1, name_tag, name_tag, write_temp, start_id))
+        .format(t0, t1, name_tag, write_temp, start_id))
 

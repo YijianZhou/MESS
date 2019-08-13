@@ -18,28 +18,21 @@ if __name__ == '__main__':
                         default='/home/zhouyj/Desktop/California/preprocess/station.dat')
     parser.add_argument('--time_range', type=str,
                         default='20190704,20190713')
-    parser.add_argument('--max_nbr', type=int, default=0)
-    parser.add_argument('--out_ctlg', type=str,
-                        default='event.sel')
+    parser.add_argument('--out_pha', type=str,
+                        default='rc.pha')
     parser.add_argument('--out_temp', type=str,
-                        default='input2/event.temp')
-    parser.add_argument('--out_dt', type=str,
-                        default='dt.cc')
+                        default='input2/temp.pha')
     parser.add_argument('--write_temp', type=int, default=1)
     parser.add_argument('--start_id', type=int, default=0)
     args = parser.parse_args()
 
 
 # i/o paths
-out_ctlg = open(args.out_ctlg,'w')
-out_dt = open(args.out_dt,'w')
-if args.write_temp==1: out_temp = open(args.out_temp,'w')
+out_pha = open(args.out_pha,'w')
 
 # assoc params
 ot_dev = 5 # sec
-loc_dev = 15 # km
-dep_dev = 20 # km
-cc_thres = 0.25 # min cc for correlated pair
+cc_thres = 0.23
 start_date = UTCDateTime(args.time_range.split(',')[0])
 end_date   = UTCDateTime(args.time_range.split(',')[1])
 
@@ -51,11 +44,11 @@ detector = detectors.TS_Det(sta_dict, resp_dict)
 
 """ Prep MFT output files
 """
-def mk_temp_dict():
+def mk_temp_list():
   f=open(args.temp_pha); lines=f.readlines(); f.close()
-  dtype=[('evid','O'),('ot','O'),('lat','O'),('lon','O'),('dep','O')]
-  temp_dict = {}
-  evid = 1
+  dtype=[('ot','O'),('lat','O'),('lon','O'),('dep','O'),('picks','O')]
+  temp_list = []
+  num=0
   for line in lines:
     info = line.split(',')
     if len(info)==5:
@@ -64,16 +57,16 @@ def mk_temp_dict():
         lat = float(info[1])
         lon = float(info[2])
         dep = float(info[3])
-        temp_loc = np.array([(evid, ot, lat, lon, dep)], dtype=dtype)
-        temp_dict[temp_name] = [temp_loc, {}]
-        evid += 1
-        if evid%5000==0: print('processed %s temps'%evid)
+        temp_list.append((ot, lat, lon, dep, []))
+        num+=1
+        if num%5000==0: print('processed %s temps'%num)
     else:
         sta = info[0]
         tp = UTCDateTime(info[1])
         ts = UTCDateTime(info[2])
-        temp_dict[temp_name][1][sta] = [tp, ts]
-  return temp_dict
+        pick_dict = {'sta':sta, 'tp':tp, 'ts':ts}
+        temp_list[-1][-1].append(pick_dict)
+  return np.array(temp_list, dtype=dtype)
 
 
 def mk_det_list():
@@ -115,7 +108,9 @@ def mk_det_list():
 
 """ Write hypoDD input files
 """
-def write_ctlg(event, evid, out, get_mag=False):
+def write_pha(event, evid, out, get_mag=False):
+
+    # 1. write event info
     ot   = event['ot']
     lat  = event['lat']
     lon  = event['lon']
@@ -123,31 +118,23 @@ def write_ctlg(event, evid, out, get_mag=False):
     yr  = ot.year
     mag = -1.0
     if get_mag: mag = calc_mag(event)
-    mon = str(ot.month).zfill(2)
-    day = str(ot.day).zfill(2)
-    date = '{}{:0>2}{:0>2}'.format(yr, mon, day)
+    mon = ot.month
+    day = ot.day
+    date = '{} {:2} {:2}'.format(yr, mon, day)
     hr  = ot.hour
     mn  = ot.minute
     sec = ot.second + ot.microsecond/1e6
-    time = '{:0>2}{:0>2}{:0>2}{:0>2}'.format(hr, mn, int(sec), int(100*sec%100))
-    out.write('{}  {}  {:8.4f}  {:9.4f}  {:9.3f}  {:4.1f}    0.00    0.00   0.00  {:9}\n'\
+    time = '{:2} {:2} {:5.2f}'.format(hr, mn, sec)
+    out.write('# {} {}  {:7.4f} {:9.4f}  {:6.2f} {:4.2f}  0.00  0.00  0.00  {:>9}\n'\
       .format(date, time, lat, lon, dep, mag, evid))
 
-
-def write_dt(det, temp_dict, evid, out):
-    det_ot = det['ot']
-    temp = temp_dict[det['temp']]
-    temp_ot = temp[0][0]['ot']
-    out.write('# {:9} {:9} 0.0\n'.format(evid, temp[0][0]['evid']))
-    for pick_dict in det['picks']:
+    # 2. write pha info
+    for pick_dict in event['picks']:
         sta = pick_dict['sta']
-        [temp_tp, temp_ts] = temp[1][sta]
-        temp_ttp, temp_tts = temp_tp-temp_ot, temp_ts-temp_ot
-        det_ttp = pick_dict['tp'] - det_ot
-        det_tts = pick_dict['ts'] - det_ot
-        cc_p, cc_s = pick_dict['cc_p'], pick_dict['cc_s']
-        out.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, det_ttp-temp_ttp, cc_p**0.5))
-        out.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, det_tts-temp_tts, cc_s**0.5))
+        ttp = pick_dict['tp'] - ot
+        tts = pick_dict['ts'] - ot
+        out.write('{:<5}{}{:6.3f}  {:6.3f}   P\n'.format(sta, ' '*6, ttp, 1.))
+        out.write('{:<5}{}{:6.3f}  {:6.3f}   S\n'.format(sta, ' '*6, tts, 1.))
 
 
 def calc_mag(event):
@@ -160,14 +147,15 @@ def calc_mag(event):
 # prep input
 print('prep input')
 t=time.time()
-temp_dict = mk_temp_dict()
 det_list = mk_det_list()
 
 # write temp events
 if args.write_temp==1:
   print('write temp events: event.sel')
-  for i,temp_name in enumerate(temp_dict):
-    write_ctlg(temp_dict[temp_name][0][0], i+1, out_temp)
+  out_temp = open(args.out_temp, 'w')
+  temp_list = mk_temp_list()
+  for i,temp in enumerate(temp_list):
+    write_pha(temp, i+1, out_temp)
   out_temp.close()
 
 # assoc det
@@ -182,21 +170,12 @@ for i,_ in enumerate(det_list):
     cc_max = np.amax(cc)
     detsi = det_list[cond_ot]
     deti  = detsi[np.argmax(cc)]
-    if cc_max>0.23: write_ctlg(deti, evid, out_ctlg, get_mag=True)
-    # find dets for reloc
-    reloc_dets = det_list[cond_ot]
-    cond_loc = 111*((reloc_dets['lat'] - deti['lat'])**2 \
-                  + (reloc_dets['lon'] - deti['lon'])**2)**0.5 < loc_dev
-    cond_dep = abs(reloc_dets['dep'] - deti['dep']) < dep_dev
-    reloc_dets = reloc_dets[cond_loc * cond_dep]
-    if args.max_nbr>0: reloc_dets = np.sort(reloc_dets, order='cc')[0:args.max_nbr]
-    for reloc_det in reloc_dets:
-      if reloc_det['cc'] > cc_thres:
-        write_dt(reloc_det, temp_dict, evid, out_dt)
+    if cc_max>cc_thres:
+        write_pha(deti, evid, out_pha, get_mag=True)
     # next det
     evid += 1
     det_list = np.delete(det_list, np.where(cond_ot), axis=0)
     if len(det_list)==0: break
 
-out_ctlg.close()
-out_dt.close()
+out_pha.close()
+
