@@ -5,6 +5,7 @@ from obspy import read, UTCDateTime
 import numpy as np
 import config
 
+
 # preprocess params
 cfg = config.Config()
 decim_rate = cfg.decim_rate
@@ -13,8 +14,10 @@ freq_band = cfg.freq_band
 win_trig = cfg.win_trig
 win_p = cfg.win_p
 win_s = cfg.win_s
-npts_trig = int(sum(win_trig) * samp_rate) + 1
+min_sta = cfg.min_sta
 temp_win = [int(sum(win) * samp_rate) + 1 for win in [win_trig, win_p, win_s]]
+npts_trig = temp_win[0]
+
 
 def preprocess(st):
     # time alignment
@@ -32,101 +35,109 @@ def preprocess(st):
         freqmax = freq_band[2]
         return st.filter(flt_type, freqmin=freqmin, freqmax=freqmax)
 
-# read 3 chn stream
+
+# read 3 chn stream & prep
 def read_stream(stream_paths):
-    stream = read(stream_paths[0])
-    stream+= read(stream_paths[1])
-    stream+= read(stream_paths[2])
-    return stream
+    stream  = read(stream_paths[0])
+    stream += read(stream_paths[1])
+    stream += read(stream_paths[2])
+    return preprocess(stream)
 
 
+# format trans
 def np2cuda(data):
     return torch.from_numpy(data).cuda()
 
-def np2tensor(data):
-    return torch.unsqueeze(torch.from_numpy(data),0)
-
 def st2np(stream):
-    return np.array([stream[0].data, stream[1].data, stream[2].data])
+    return np.array([tr.data for tr in stream])
 
 def st2cuda(stream):
     return np2cuda(st2np(stream))
 
-def st2tensor(stream):
-    return np2tensor(st2np(stream))
 
 
 class Templates(Dataset):
 
-  def __init__(self, temp_root, temp_dict):
+  def __init__(self, temp_dict):
     """ Dataset for reading Templates
     """
-    self.temp_dirs = glob.glob(os.path.join(temp_root,'*'))
     self.temp_dict = temp_dict
+    self.event_list = sorted(list(temp_dict.keys()))
 
   def __getitem__(self, index):
-    # temp info
-    temp_dir = self.temp_dirs[index]
-    temp_name = os.path.split(temp_dir)[-1]
+
+    # read one template
+    temp_name = self.event_list[index]
+    temp_dir, temp_loc, pick_dict = self.temp_dict[temp_name]
+    ot = temp_loc[0]
+
     out_dict = {}
     # read data
-    temp_paths = glob.glob(os.path.join(temp_dir,'*.*Z'))
-    for temp_path in temp_paths:
+    for sta, [tp,ts] in pick_dict.items():
+        # read temp stream
         is_bad = False
-        _, sta, _ = os.path.split(temp_path)[-1].split('.')
-        [tp, ts, _] = self.temp_dict[temp_name][1][sta]
         stream_paths = sorted(glob.glob(os.path.join(temp_dir, '*.%s.*'%sta)))
-        stream = preprocess(read_stream(stream_paths))
+        stream = read_stream(stream_paths)
+        # cut temp
         temp_trig = stream.slice(tp - win_trig[0], tp + win_trig[1])
-        temp_p    = stream.slice(tp - win_p[0], tp + win_p[1])
-        temp_s    = stream.slice(ts - win_s[0], ts + win_s[1])
+        temp_p    = stream.slice(tp - win_p[0],    tp + win_p[1])
+        temp_s    = stream.slice(ts - win_s[0],    ts + win_s[1])
+        if min([len(st) for st in [temp_trig, temp_p, temp_s]])<3: continue
         temp = [st2np(tempi) for tempi in [temp_trig, temp_p, temp_s]]
         for i,tempi in enumerate(temp):
             if len(tempi[0]) != temp_win[i]: is_bad = True
         if is_bad: continue
-        norm_trig = [np.sqrt(np.sum(tri**2)) for tri in temp[0]]
-        norm_p    = [np.sqrt(np.sum(tri**2)) for tri in temp[1]]
-        norm_s    = [np.sqrt(np.sum(tri**2)) for tri in temp[2]]
+        norm_trig = [np.sqrt(np.sum(tr**2)) for tr in temp[0]]
+        norm_p    = [np.sqrt(np.sum(tr**2)) for tr in temp[1]]
+        norm_s    = [np.sqrt(np.sum(tr**2)) for tr in temp[2]]
         norm_temp = [norm_trig, norm_p, norm_s]
-        # output (data, label)
-        out_dict[sta] = [temp, norm_temp]
+        dt_list = [int(dt*samp_rate) for dt in [tp-ot, ts-ot, ot-tp+win_trig[0]]]
+        out_dict[sta] = [temp, norm_temp] + dt_list
     return temp_name, out_dict
 
   def __len__(self):
-    return len(self.temp_dirs)
+    return len(self.event_list)
+
 
 
 class Data(Dataset):
 
-  def __init__(self, data_dict, date):
+  def __init__(self, data_dict):
     """ Dataset for reading Continuous Data
     """
     self.data_dict = data_dict
-    self.sta_list = list(data_dict.keys())
-    self.date = date
+    self.sta_list = sorted(list(data_dict.keys()))
 
   def __getitem__(self, index):
     # read one station
     sta = self.sta_list[index]
     # read data
     stream_paths = self.data_dict[sta]
-    stream = preprocess(read_stream(stream_paths))
-    dt_st = stream[0].stats.starttime - self.date
+    stream = read_stream(stream_paths)
+    start_time = stream[0].stats.starttime
+    # if poor data clean
+    end_time = stream[0].stats.endtime
+    date_dev = UTCDateTime(end_time.date) - UTCDateTime(start_time.date)
+    if date_dev==86400 or date_dev==2*86400:
+        start_time = UTCDateTime(start_time.date) + 86400
+    date = UTCDateTime(start_time.date)
 
     # get stream data (np.array)
-    st_holder = np.zeros([3,int(86400*samp_rate+1)])
-    st_np = st2np(stream.slice(self.date, self.date + 86400))
-    idx0 = int(dt_st * samp_rate)
-    idx1 = int(idx0 + st_np.shape[1])
-    st_holder[:, idx0:idx1] = st_np
-    st_np = st_holder
+    data_holder = np.zeros([3,int(86400*samp_rate+1)])
+    data_np = st2np(stream.slice(date, date+86400))
+    idx0 = int((start_time - date) * samp_rate)
+    idx1 = int(idx0 + data_np.shape[1])
+    data_holder[:, idx0:idx1] = data_np
+    data_np = data_holder
+
     # calc norm data (for corr)
-    data_cum = [np.cumsum(datai**2) for datai in st_np]
+    data_cum = [np.cumsum(datai**2) for datai in data_np]
     norm_data = [np.sqrt(cumi[npts_trig:] - cumi[:-npts_trig]) for cumi in data_cum]
-    return sta, [st_np, norm_data, dt_st]
+    return sta, [data_np, norm_data]
 
   def __len__(self):
     return len(self.sta_list)
+
 
 
 """ Read Template Data
@@ -134,48 +145,43 @@ class Data(Dataset):
     temp_pha: phase file (text) for template phases
     temp_root: root dir fot template data
   Outputs
-    temp_dict: temp_dict[temp_name] = [temp_loc, temp_picks]
-               temp_picks[sta] = [temp, norm_temp] + [tp, ts, ot, dt_ot]
-    temp == [temp_trig, temp_p, temp_s]
+    temp_dict = {temp_name: [temp_loc, pick_dict]}
+    pick_dict[sta] = [temp, norm_temp] + [ttp, tts, dt_ot]
+    temp = [temp_trig, temp_p, temp_s]
     norm_temp = [norm_trig, norm_p, norm_s]
 """
 
-def get_temp_dict(temp_pha, temp_root):
+def read_temp(temp_pha, temp_root):
 
-    # make temp dict
+    # 1. read temp pha as temp dict
+    print('Reading template phase file')
     f=open(temp_pha); lines=f.readlines(); f.close()
     temp_dict = {}
     for line in lines:
-      info = line.split(',')
-      if len(info)==5:
-        temp_name = info[0]
-        ot   = UTCDateTime(temp_name)
-        lat  = float(info[1])
-        lon  = float(info[2])
-        dep  = float(info[3])
+      codes = line.split(',')
+      if len(codes)==5:
+        temp_name = codes[0]
+        temp_dir = os.path.join(temp_root, temp_name)
+        ot = UTCDateTime(codes[0])
+        lat, lon, dep = [float(code) for code in codes[1:4]]
         temp_loc = [ot, lat, lon, dep]
-        temp_dict[temp_name] = [temp_loc, {}]
+        temp_dict[temp_name] = [temp_dir, temp_loc, {}]
       else:
-        sta = info[0]
-        tp = UTCDateTime(info[1])
-        ts = UTCDateTime(info[2])
-        dt_ot = ot - tp + win_trig[0]
-        temp_dict[temp_name][1][sta] = [tp, ts, dt_ot]
+        sta = codes[1]
+        tp, ts = [UTCDateTime(code) for code in codes[2:4]]
+        temp_dict[temp_name][-1][sta] = [tp, ts]
 
     # read temp data
-    print('Read template data')
+    print('Reading template data')
     t=time.time()
     todel = []
-    temp_dataset = Templates(temp_root, temp_dict)
+    temp_dataset = Templates(temp_dict)
     temp_loader = DataLoader(temp_dataset, num_workers=10, pin_memory=True)
-    for i, (temp_name, out_dict) in enumerate(temp_loader):
+    for i, (temp_name, pick_dict) in enumerate(temp_loader):
         temp_name = temp_name[0]
-        if len(out_dict)<4: todel.append(temp_name)
-        [ot, lat, lon, dep] = temp_dict[temp_name][0]
-        for sta in out_dict:
-            [tp, ts, dt_ot] = temp_dict[temp_name][1][sta]
-            out_dict[sta] += [tp, ts, ot, dt_ot]
-        temp_dict[temp_name][1] = out_dict
+        if len(pick_dict)<min_sta: todel.append(temp_name)
+        temp_loc = temp_dict[temp_name][1]
+        temp_dict[temp_name] = [temp_loc, pick_dict]
         if i%100==0: print('{}th template: {} {:.1f}s'.format(i, temp_name, time.time()-t))
     for temp_name in todel: temp_dict.pop(temp_name)
     return temp_dict
@@ -183,15 +189,18 @@ def get_temp_dict(temp_pha, temp_root):
 
 """ Read Continuous Data
   Inputs
-    data_dict: data_dict[sta] = stream_paths
+    data_dict = {sta: stream_paths}
+  Outputs
+    data_dict = {sta: [data, norm_data]} 
 """
 
-def read_data(data_dict, date):
+def read_data(data_dict):
     t=time.time()
-    print('read continuous data')
-    data_dataset = Data(data_dict, date)
-    data_loader = DataLoader(data_dataset, num_workers=10, pin_memory=True)
+    print('Read continuous data')
+    data_dataset = Data(data_dict)
+    data_loader = DataLoader(data_dataset, num_workers=5, pin_memory=True)
     for i, (sta, outi) in enumerate(data_loader):
-        data_dict[sta[0]] = outi + [date]
+        data_dict[sta[0]] = outi
         print('read {} | time {:.1f}s'.format(sta[0], time.time()-t))
     return data_dict
+

@@ -1,14 +1,12 @@
 import torch
 import torch.nn.functional as F
 from scipy.signal import correlate
-import multiprocessing as mp
 import numpy as np
+import matplotlib.pyplot as plt
 import time
 
 def calc_cc_gpu(data_mat, temp_mat, norm_data_mat, norm_temp_vec):
     """ Cala CC trace by GPU cuda
-    Inputs
-        cuda tensor
     """
     num_sta, len_data = data_mat.shape
     _, len_temp = temp_mat.shape
@@ -21,7 +19,7 @@ def calc_cc_gpu(data_mat, temp_mat, norm_data_mat, norm_temp_vec):
     return cc
 
 
-def calc_cc(data, temp, **kwargs):
+def calc_cc(data, temp, norm_data=None, norm_temp=None):
     """ Calc CC trace for a template trace
     Input
         data: continuous data to detect from, np.array
@@ -29,13 +27,13 @@ def calc_cc(data, temp, **kwargs):
     Output
         cc: cross-correlation function
     """
-    ntemp = len(temp)
-    ndata = len(data)
+    ntemp, ndata = len(temp), len(data)
     if ntemp>ndata: return [0]
-    if 'norm_temp' in kwargs: norm_temp = kwargs['norm_temp']
-    else: norm_temp = np.sqrt(np.sum(temp**2))
-    data_cum = np.cumsum(data**2)
-    norm_data = np.sqrt(data_cum[ntemp:] - data_cum[:-ntemp])
+    if not norm_temp: 
+        norm_temp = np.sqrt(np.sum(temp**2))
+    if not norm_data:
+        data_cum = np.cumsum(data**2)
+        norm_data = np.sqrt(data_cum[ntemp:] - data_cum[:-ntemp])
     cc = correlate(data, temp, mode='valid')
     cc = cc[1:] /norm_temp /norm_data
     cc[np.isinf(cc)] = 0.
@@ -43,78 +41,54 @@ def calc_cc(data, temp, **kwargs):
     return cc
 
 
-def calc_masked_cc(temp_picks, data_dict, trig_thres, mask_len, samp_rate):
+def calc_masked_cc(cc_holder, pick_dict, data_dict, trig_thres, mask_len):
 
     t=time.time()
     # 1. calc cc (GPU)
     # make input matrix
-    data_list = []
-    temp_list = []
-    dt_list = []
-    for sta, [temp, norm_temp, _, _, _, dt_ot] in temp_picks.items():
+    data_list, temp_list, dt_list = [], [], []
+    for sta, [temp, norm_temp, _, _, dt_ot] in pick_dict.items():
         # get data
-        if sta not in data_dict: continue
-        [st_tensor, norm_data, dt_st, _] = data_dict[sta]
-        data_list.append([st_tensor, norm_data])
+        data_tensor, norm_data = data_dict[sta]
+        data_list.append([data_tensor, norm_data])
         temp_list.append([temp[0], norm_temp[0]])
-        dt_list.append(dt_st+dt_ot)
-    cc = calc_shifted_cc(data_list, temp_list, dt_list, samp_rate)
+        dt_list.append(dt_ot)
+    cc = calc_shifted_cc(cc_holder, data_list, temp_list, dt_list)
     cc = cc.cpu().numpy()
+
     # 2. mask cc traces
-    cc_masked = []
-    for cci in cc:
-        cci, num = mask_cc(cci, trig_thres, mask_len)
-        cc_masked.append(cci)
-    print('process {} stations | time {:.1f}s'.format(len(temp_picks), time.time()-t))
+    cc_masked = [mask_cc(cci, trig_thres, mask_len) for cci in cc]
+    print('process {} stations | time {:.1f}s'.format(len(dt_list), time.time()-t))
     return cc_masked
 
 
 # 1. calc cc trace & time shift
-def calc_shifted_cc(data_list, temp_list, dt_list, samp_rate):
+def calc_shifted_cc(cc_holder, data_list, temp_list, dt_list):
 
+  for i in range(3):
     # data_mat
-    st_mat_e = torch.cat([datai[:,0] for [datai,_] in data_list]).cuda()
-    st_mat_n = torch.cat([datai[:,1] for [datai,_] in data_list]).cuda()
-    st_mat_z = torch.cat([datai[:,2] for [datai,_] in data_list]).cuda()
-    # temp_mat
-    temp_mat_e = torch.cat([tempi[:,0] for [tempi,_] in temp_list]).cuda()
-    temp_mat_n = torch.cat([tempi[:,1] for [tempi,_] in temp_list]).cuda()
-    temp_mat_z = torch.cat([tempi[:,2] for [tempi,_] in temp_list]).cuda()
-    # norm_data mat
-    norm_data_e = torch.cat([normi[0] for [_,normi] in data_list]).cuda()
-    norm_data_n = torch.cat([normi[1] for [_,normi] in data_list]).cuda()
-    norm_data_z = torch.cat([normi[2] for [_,normi] in data_list]).cuda()
-    # norm_temp vec
-    norm_temp_e = torch.tensor([normi[0] for [_,normi] in temp_list]).cuda()
-    norm_temp_n = torch.tensor([normi[1] for [_,normi] in temp_list]).cuda()
-    norm_temp_z = torch.tensor([normi[2] for [_,normi] in temp_list]).cuda()
-
+    data_mat = torch.cat([datai[:,i] for [datai,_] in data_list]).cuda()
+    temp_mat = torch.cat([tempi[:,i] for [tempi,_] in temp_list]).cuda()
+    norm_data = torch.cat([normi[i] for [_,normi] in data_list]).cuda()
+    norm_temp = torch.tensor([normi[i] for [_,normi] in temp_list]).cuda()
     # calc cc traces (mat) with GPU
-    cc  = calc_cc_gpu(st_mat_e, temp_mat_e, norm_data_e, norm_temp_e)
-    cc += calc_cc_gpu(st_mat_n, temp_mat_n, norm_data_n, norm_temp_n)
-    cc += calc_cc_gpu(st_mat_z, temp_mat_z, norm_data_z, norm_temp_z)
-    cc /= 3.
+    if i==0: cc  = calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
+    else:    cc += calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
+  cc /= 3.
 
-    # time shift to ot
-    cc_holder = torch.zeros([len(dt_list), int(86400*samp_rate)])
-    for i,dt in enumerate(dt_list):
-        cci = cc[i]
-        dt = int(samp_rate * dt)
-        cci = cci[max(0,-dt) : max(0,-dt) + len(cci)]
-        cc_holder[i][max(0,dt) : max(0,dt) + len(cci)] = cci[0 : cc_holder.shape[1] - max(0,dt)]
-    return cc_holder
+  # time shift to ot
+  for i,dt_ot in enumerate(dt_list):
+    cci = cc[i][max(0,-dt_ot) : cc_holder.shape[1] - dt_ot]
+    cc_holder[i][max(0,dt_ot) : max(0,dt_ot) + len(cci)] = cci
+  return cc_holder
 
 
 # 2. mask cc trace
 def mask_cc(cci, trig_thres, mask_len):
-
   # cc mask
   trig_idxs = np.where(cci > trig_thres)[0]
   slide_idx = 0
-  num = 0
   for _ in trig_idxs:
-    num += 1
-
     # mask cci with max cc
     trig_idx = trig_idxs[trig_idxs >= slide_idx][0]
     cc_max = np.amax(cci[trig_idx : trig_idx + mask_len])
@@ -123,15 +97,14 @@ def mask_cc(cci, trig_thres, mask_len):
     mask_idx0 = max(0, idx_max - mask_len //2)
     mask_idx1 = idx_max + mask_len//2
     cci[mask_idx0 : mask_idx1] = cc_max
-
     # next trig
     slide_idx = idx_max + 2*mask_len
     if slide_idx > trig_idxs[-1]: break
-  return cci, num
+  return cci
 
 
 # 3. detect in stacked cc trace
-def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
+def det_cc_stack(cc_stack, trig_thres, mask_len):
 
   det_idxs = np.where(cc_stack > trig_thres)[0]
   slide_idx = 0
@@ -146,9 +119,8 @@ def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
     cc_max  = np.amax(cc_stack[det_idx : det_idx + 2*mask_len])
     idx_max = np.where(cc_stack[det_idx: det_idx + 2*mask_len] == cc_max)
     idx_max = int(np.median(idx_max)) + det_idx # to abs idx
-    det_oti = date + idx_max / samp_rate
-    det_ots.append([det_oti, cc_max])
-    print('detection: ', det_oti, round(cc_max,2))
+    det_ot = idx_max
+    det_ots.append([det_ot, cc_max])
 
     # next detection
     slide_idx = idx_max + 2*mask_len
@@ -157,63 +129,54 @@ def det_cc_stack(cc_stack, trig_thres, mask_len, date, samp_rate):
 
 
 # 4. pick P&S by cc
-def ppk_cc(det_oti, temp_picks, data_dict, 
-           win_p, win_s, picker, mask_len, samp_rate):
+def ppk_cc(det_ot, pick_dict, data_dict, win_p, win_s, picker, mask_len):
 
-  picksi = []
-  for sta, [temp, norm_temp, tp, ts, ot, _] in temp_picks.items():
+  picks = []
+  for sta, [temp, norm_temp, ttp, tts, _] in pick_dict.items():
 
     # get data
-    if sta not in data_dict: continue
-    [st_tensor, _, _, date] = data_dict[sta]
-
-    # org tpi & tsi idx
-    tpi0_idx = int(samp_rate * (det_oti + (tp-ot) - date))
-    tsi0_idx = int(samp_rate * (det_oti + (ts-ot) - date))
-
+    st_tensor, _ = data_dict[sta]
+    # org tp & ts (in idx)
+    tp0, ts0 = int(det_ot+ttp), int(det_ot+tts)
     # cut p&s data (by points)
-    p_rng = [int(win_p[0] * samp_rate) +   mask_len,
-             int(win_p[1] * samp_rate) +   mask_len]
-    s_rng = [int(win_s[0] * samp_rate) + 2*mask_len,
-             int(win_s[1] * samp_rate) + 2*mask_len]
-    if tpi0_idx<p_rng[0] or tsi0_idx<s_rng[0]\
-    or tsi0_idx+s_rng[1] > st_tensor.shape[-1]: continue
-    st_p = st_tensor[0,:, tpi0_idx - p_rng[0] : tpi0_idx + p_rng[1]].numpy()
-    st_s = st_tensor[0,:, tsi0_idx - s_rng[0] : tsi0_idx + s_rng[1]].numpy()
+    p_rng = [win_p[0]+  mask_len, win_p[1]+  mask_len]
+    s_rng = [win_s[0]+2*mask_len, win_s[1]+2*mask_len]
+    if tp0 < p_rng[0] or ts0 < s_rng[0]\
+    or ts0 + s_rng[1] > st_tensor.shape[-1]: continue
+    st_p = st_tensor[0,:, tp0-p_rng[0] : tp0+p_rng[1]].numpy()
+    st_s = st_tensor[0,:, ts0-s_rng[0] : ts0+s_rng[1]].numpy()
 
     # ppk by cc
     temp_p, temp_s = temp[1][0].numpy(), temp[2][0].numpy()
-    cc_p  = calc_cc(st_p[2], temp_p[2], norm_temp=norm_temp[1][2].numpy())
-    cc_s0 = calc_cc(st_s[0], temp_s[0], norm_temp=norm_temp[2][0].numpy())
-    cc_s1 = calc_cc(st_s[1], temp_s[1], norm_temp=norm_temp[2][1].numpy())
-    # tpi & tsi idx
-    tpi_idx = tpi0_idx + np.argmax(cc_p) - mask_len
-    tsi_idx = tsi0_idx + (np.argmax(cc_s0) + np.argmax(cc_s1))/2. - 2*mask_len
-    tpi = date + tpi_idx / samp_rate
-    tsi = date + tsi_idx / samp_rate
+    cc_p  = calc_cc(st_p[2], temp_p[2], None, norm_temp[1][2].numpy())
+    cc_s0 = calc_cc(st_s[0], temp_s[0], None, norm_temp[2][0].numpy())
+    cc_s1 = calc_cc(st_s[1], temp_s[1], None, norm_temp[2][1].numpy())
+    # tp & ts (in idx)
+    tp = tp0 + np.argmax(cc_p) - mask_len
+    ts = ts0 + (np.argmax(cc_s0) + np.argmax(cc_s1))/2. - 2*mask_len
     cc_p_max = np.amax(cc_p)
     cc_s_max = (np.amax(cc_s0) + np.amax(cc_s1)) / 2.
 
     # get S amplitude
-    ampx = picker.get_amp(st_s[0])
-    ampy = picker.get_amp(st_s[1])
-    ampz = picker.get_amp(st_s[2])
-    s_amp = np.sqrt(ampx**2 + ampy**2 + ampz**2)
-
+    amp = [picker.get_amp(tr)**2 for tr in st_s]
+    s_amp = np.sqrt(sum(amp))
     # add pick
-    picksi.append([sta, tpi, tsi, s_amp, cc_p_max, cc_s_max])
-  return picksi
+    picks.append([sta, tp, ts, s_amp, cc_p_max, cc_s_max])
+  return picks
 
 
-def write_det_ppk(det_oti, det_cci, temp_loc, picks, out_ctlg, out_pha):
+def write_det_ppk(det_ot, det_cc, temp_name, temp_loc, picks, out_ctlg, out_pha):
 
     # write catalog
-    event_line = '{},{},{},{},{:.3f}\n'.\
-    format(det_oti, temp_loc[0], temp_loc[1], temp_loc[2], det_cci)
+    _, lat, lon, dep = temp_loc
+    event_line = '{},{},{},{},{},{:.3f}\n'.\
+    format(temp_name, det_ot, lat, lon, dep, det_cc)
+    print('detection: ', event_line[:-1])
     out_ctlg.write(event_line)
     # write phase
     out_pha.write(event_line)
     for pick in picks:
-        out_pha.write('{},{},{},{:.2f},{:.3f},{:.3f}\n'.\
-        format(pick[0], pick[1], pick[2], pick[3], pick[4], pick[5]))
+        out_pha.write('{0[0]},{0[1]},{0[2]},{0[3]},{0[4]:.3f},{0[5]:.3f}\n'.format(pick))
 
+def idx2time(idx, samp_rate, date):
+    return date + idx / samp_rate
