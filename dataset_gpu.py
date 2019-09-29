@@ -49,7 +49,7 @@ def np2cuda(data):
     return torch.from_numpy(data).cuda()
 
 def st2np(stream):
-    return np.array([tr.data for tr in stream])
+    return np.array([tr.data for tr in stream], dtype=np.float64)
 
 def st2cuda(stream):
     return np2cuda(st2np(stream))
@@ -157,7 +157,7 @@ def read_temp(temp_pha, temp_root):
     print('Reading template phase file')
     f=open(temp_pha); lines=f.readlines(); f.close()
     temp_dict = {}
-    for line in lines:
+    for line in lines[0:46]:
       codes = line.split(',')
       if len(codes)==5:
         temp_name = codes[0]

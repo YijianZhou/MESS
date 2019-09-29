@@ -21,7 +21,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 if __name__ == '__main__':
-  mp.set_start_method('spawn')
+#  mp.set_start_method('spawn')
+  mp.set_start_method('forkserver', force=True)
   parser = argparse.ArgumentParser()
   parser.add_argument('--data_dir', type=str,
                       default='/data/ZSY_SAC/[Y-Z]*/*')
@@ -73,25 +74,27 @@ if __name__ == '__main__':
     print('Detecting %s'%date.date)
 
     # run MFT with all templates
+    torch.cuda.empty_cache()
     for temp_name, [temp_loc, pick_dict] in temp_dict.items():
 
         # init
         t=time.time()
-        torch.cuda.empty_cache()
+#        torch.cuda.empty_cache()
         print('template ', temp_loc)
         # drop bad sta
         todel = [sta for sta in pick_dict if sta not in data_dict]
         for sta in todel: pick_dict.pop(sta)
         if len(pick_dict)<min_sta: continue
 
-        # for each station, calc masked cc trace
+        # for each station, calc masked cc traces
         cc_holder = torch.zeros([len(pick_dict), int(86400*samp_rate)])
-        cc_masked = calc_masked_cc(cc_holder, pick_dict, data_dict, trig_thres, mask_len)
+        cc = calc_cc_traces(cc_holder, pick_dict, data_dict, trig_thres, mask_len)
+        cc_masked = [mask_cc(cci, trig_thres, mask_len) for cci in cc]
         # detect with stacked cc trace
-        cc_stack = np.sum(cc_masked,axis=0) / len(cc_masked)
+        cc_stack = np.sum(cc_masked, axis=0) / len(cc_masked)
 #        plt.plot(cc_stack); plt.show()
         det_ots = det_cc_stack(cc_stack, trig_thres, mask_len)
-        print('{} detections | time {:.1f}'.format(len(det_ots), time.time()-t))
+        print('{} detections | time {:.2f}s'.format(len(det_ots), time.time()-t))
         if len(det_ots)==0: continue
 
         # ppk by cc
@@ -102,7 +105,7 @@ if __name__ == '__main__':
             for i in range(len(picks)): 
                 picks[i][1:3] = [idx2time(idx, samp_rate, date) for idx in picks[i][1:3]]
             write_det_ppk(det_ot, det_cc, temp_name, temp_loc, picks, out_ctlg, out_pha)
-        print('time consumption: {:.2f}'.format(time.time()-t))
+        print('time consumption: {:.2f}s'.format(time.time()-t))
 
   out_ctlg.close()
   out_pha.close()

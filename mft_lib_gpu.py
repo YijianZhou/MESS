@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from scipy.signal import correlate
 import numpy as np
+from numba import jit
 import matplotlib.pyplot as plt
 import time
 
@@ -41,7 +42,7 @@ def calc_cc(data, temp, norm_data=None, norm_temp=None):
     return cc
 
 
-def calc_masked_cc(cc_holder, pick_dict, data_dict, trig_thres, mask_len):
+def calc_cc_traces(cc_holder, pick_dict, data_dict, trig_thres, mask_len):
 
     t=time.time()
     # 1. calc cc (GPU)
@@ -54,12 +55,8 @@ def calc_masked_cc(cc_holder, pick_dict, data_dict, trig_thres, mask_len):
         temp_list.append([temp[0], norm_temp[0]])
         dt_list.append(dt_ot)
     cc = calc_shifted_cc(cc_holder, data_list, temp_list, dt_list)
-    cc = cc.cpu().numpy()
-
-    # 2. mask cc traces
-    cc_masked = [mask_cc(cci, trig_thres, mask_len) for cci in cc]
-    print('process {} stations | time {:.1f}s'.format(len(dt_list), time.time()-t))
-    return cc_masked
+    print('process {} stations | time {:.2f}s'.format(len(dt_list), time.time()-t))
+    return cc.cpu().numpy()
 
 
 # 1. calc cc trace & time shift
@@ -70,7 +67,7 @@ def calc_shifted_cc(cc_holder, data_list, temp_list, dt_list):
     data_mat = torch.cat([datai[:,i] for [datai,_] in data_list]).cuda()
     temp_mat = torch.cat([tempi[:,i] for [tempi,_] in temp_list]).cuda()
     norm_data = torch.cat([normi[i] for [_,normi] in data_list]).cuda()
-    norm_temp = torch.tensor([normi[i] for [_,normi] in temp_list]).cuda()
+    norm_temp = torch.tensor([normi[i] for [_,normi] in temp_list], dtype=torch.double).cuda()
     # calc cc traces (mat) with GPU
     if i==0: cc  = calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
     else:    cc += calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
@@ -84,48 +81,41 @@ def calc_shifted_cc(cc_holder, data_list, temp_list, dt_list):
 
 
 # 2. mask cc trace
-def mask_cc(cci, trig_thres, mask_len):
+@jit
+def mask_cc(cc, trig_thres, mask_len):
   # cc mask
-  trig_idxs = np.where(cci > trig_thres)[0]
+  trig_idxs = np.where(cc>trig_thres)[0]
   slide_idx = 0
-  for _ in trig_idxs:
-    # mask cci with max cc
-    trig_idx = trig_idxs[trig_idxs >= slide_idx][0]
-    cc_max = np.amax(cci[trig_idx : trig_idx + mask_len])
-    idx_max = np.argmax(cci[trig_idx : trig_idx + mask_len])
-    idx_max += trig_idx # to abs idx
-    mask_idx0 = max(0, idx_max - mask_len //2)
-    mask_idx1 = idx_max + mask_len//2
-    cci[mask_idx0 : mask_idx1] = cc_max
+  for trig_idx in trig_idxs:
+    # mask cc with peak ccs
+    if trig_idx < slide_idx: continue
+    cc_trig = cc[trig_idx : trig_idx+mask_len]
+    cc_max = np.amax(cc_trig)
+    idx_max = trig_idx + np.argmax(cc_trig)
+    idx0 = max(0, idx_max - mask_len//2)
+    idx1 = idx_max + mask_len//2
+    cc[idx0:idx1] = cc_max
     # next trig
     slide_idx = idx_max + 2*mask_len
-    if slide_idx > trig_idxs[-1]: break
-  return cci
+  return cc
 
 
 # 3. detect in stacked cc trace
+@jit
 def det_cc_stack(cc_stack, trig_thres, mask_len):
-
-  det_idxs = np.where(cc_stack > trig_thres)[0]
+  det_idxs = np.where(cc_stack>trig_thres)[0]
   slide_idx = 0
-  det_ots = []
-  for _ in det_idxs:
-
-    # this detection
-    det_idx = det_idxs[det_idxs >= slide_idx][0]
-    if det_idx + 2*mask_len > len(cc_stack)-1: break
-
-    # pick ot
-    cc_max  = np.amax(cc_stack[det_idx : det_idx + 2*mask_len])
-    idx_max = np.where(cc_stack[det_idx: det_idx + 2*mask_len] == cc_max)
-    idx_max = int(np.median(idx_max)) + det_idx # to abs idx
-    det_ot = idx_max
-    det_ots.append([det_ot, cc_max])
-
+  dets = []
+  for det_idx in det_idxs:
+    if det_idx < slide_idx: continue
+    # det ot
+    cc_det = cc_stack[det_idx : det_idx+2*mask_len]
+    cc_max  = np.amax(cc_det)
+    idx_max = det_idx + int(np.median(np.where(cc_det == cc_max)[0]))
+    dets.append([idx_max, cc_max])
     # next detection
     slide_idx = idx_max + 2*mask_len
-    if slide_idx > det_idxs[-1]: break
-  return det_ots
+  return dets
 
 
 # 4. pick P&S by cc
