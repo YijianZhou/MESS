@@ -1,4 +1,4 @@
-# MFT
+# MaSS
 Simple implementation of matched filter technique  
 <br>
 Procedures: <br>
