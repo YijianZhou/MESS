@@ -118,7 +118,7 @@ class Data(Dataset):
     # if poor data clean
     end_time = stream[0].stats.endtime
     date_dev = UTCDateTime(end_time.date) - UTCDateTime(start_time.date)
-    if date_dev==86400 or date_dev==2*86400:
+    if date_dev==2*86400:
         start_time = UTCDateTime(start_time.date) + 86400
     date = UTCDateTime(start_time.date)
 
