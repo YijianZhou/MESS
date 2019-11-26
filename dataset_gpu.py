@@ -5,7 +5,6 @@ from obspy import read, UTCDateTime
 import numpy as np
 import config
 
-
 # preprocess params
 cfg = config.Config()
 decim_rate = cfg.decim_rate
@@ -68,15 +67,15 @@ class Templates(Dataset):
 
     # read one template
     temp_name = self.event_list[index]
-    temp_dir, temp_loc, pick_dict = self.temp_dict[temp_name]
+    temp_dir, temp_loc, pick_dict_ppk = self.temp_dict[temp_name]
     ot = temp_loc[0]
 
-    out_dict = {}
     # read data
-    for sta, [tp,ts] in pick_dict.items():
+    pick_dict_data = {}
+    for net_sta, [tp,ts] in pick_dict_ppk.items():
         # read temp stream
         is_bad = False
-        stream_paths = sorted(glob.glob(os.path.join(temp_dir, '*.%s.*'%sta)))
+        stream_paths = sorted(glob.glob(os.path.join(temp_dir, '%s.*'%net_sta)))
         stream = read_stream(stream_paths)
         # cut temp
         temp_trig = stream.slice(tp - win_trig[0], tp + win_trig[1])
@@ -92,8 +91,8 @@ class Templates(Dataset):
         norm_s    = [np.sqrt(np.sum(tr**2)) for tr in temp[2]]
         norm_temp = [norm_trig, norm_p, norm_s]
         dt_list = [int(dt*samp_rate) for dt in [tp-ot, ts-ot, ot-tp+win_trig[0]]]
-        out_dict[sta] = [temp, norm_temp] + dt_list
-    return temp_name, out_dict
+        pick_dict_data[net_sta] = [temp, norm_temp] + dt_list
+    return temp_name, pick_dict_data
 
   def __len__(self):
     return len(self.event_list)
@@ -138,22 +137,26 @@ class Data(Dataset):
 
 """ Read Template Data
   Inputs
-    temp_pha: phase file (text) for template phases
-    temp_root: root dir fot template data
+    temp_pha: template phase file (text);
+        event line: ot, lat, lon, dep, mag
+        phase line: net, sta, tp, ts, s_amp, p_snr, s_snr
+    temp_root: root dir for template data
+        temp_root/temp_name/net.sta.chn
+        Note: temp_name == ot (yyyymmddhhmmss)
   Outputs
     temp_dict = {temp_name: [temp_loc, pick_dict]}
-    pick_dict[sta] = [temp, norm_temp] + [ttp, tts, dt_ot]
+    pick_dict[net_sta] = [temp, norm_temp] + [ttp, tts, dt_ot]
     temp = [temp_trig, temp_p, temp_s]
     norm_temp = [norm_trig, norm_p, norm_s]
 """
 
 def read_temp(temp_pha, temp_root):
 
-    # 1. read temp pha as temp dict
+    # 1. read phase file to temp_dict
     print('Reading template phase file')
     f=open(temp_pha); lines=f.readlines(); f.close()
     temp_dict = {}
-    for line in lines[0:46]:
+    for line in lines:
       codes = line.split(',')
       if len(codes)==5:
         temp_name = codes[0]
@@ -163,11 +166,11 @@ def read_temp(temp_pha, temp_root):
         temp_loc = [ot, lat, lon, dep]
         temp_dict[temp_name] = [temp_dir, temp_loc, {}]
       else:
-        sta = codes[1]
+        net_sta = '.'.join(codes[0:2])
         tp, ts = [UTCDateTime(code) for code in codes[2:4]]
-        temp_dict[temp_name][-1][sta] = [tp, ts]
+        temp_dict[temp_name][-1][net_sta] = [tp, ts]
 
-    # read temp data
+    # 2. read temp data
     print('Reading template data')
     t=time.time()
     todel = []

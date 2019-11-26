@@ -7,7 +7,7 @@ from obspy import read, UTCDateTime
 # import functions from PAD
 import data_pipeline as dp
 import pickers
-# import MFT functions
+# import MSMS functions
 from dataset_gpu_torch import read_temp, read_data
 from mft_lib_gpu_torch import *
 import config
@@ -25,21 +25,21 @@ if __name__ == '__main__':
   mp.set_start_method('forkserver', force=True)
   parser = argparse.ArgumentParser()
   parser.add_argument('--data_dir', type=str,
-                      default='/data/ZSY_SAC/[Y-Z]*/*')
+                      default='/data3/luwf_data/Trace/Linear_Pad/*')
   parser.add_argument('--time_range', type=str,
-                      default='20160901,20190201')
+                      default='20170927,20170928')
   parser.add_argument('--temp_root', type=str,
-                      default='./output/zsy/Templates')
+                      default='./output/Templates')
   parser.add_argument('--temp_pha', type=str,
-                      default='./output/zsy/temp_zsy.pha')
+                      default='./output/phase_jz.dat')
   parser.add_argument('--out_ctlg', type=str,
-                      default='./output/zsy/aug_zsy.ctlg')
+                      default='./output/tmp.ctlg')
   parser.add_argument('--out_pha', type=str,
-                      default='./output/zsy/aug_zsy.pha')
+                      default='./output/tmp.pha')
   args = parser.parse_args()
 
 
-  # MFT params
+  # MSMS params
   cfg = config.Config()
   decim_rate = cfg.decim_rate
   freq_band = cfg.freq_band
@@ -67,37 +67,37 @@ if __name__ == '__main__':
 
     # read data
     date = start_date + day_idx*86400
-    data_dict = dp.get_rc(args.data_dir, date)
+    data_dict = dp.get_jz(args.data_dir, date)
     if data_dict=={}: continue
     data_dict = read_data(data_dict)
     print('-'*40)
     print('Detecting %s'%date.date)
 
-    # run MFT with all templates
-    torch.cuda.empty_cache()
+    # for all templates
     for temp_name, [temp_loc, pick_dict] in temp_dict.items():
 
         # init
         t=time.time()
-#        torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
         print('template ', temp_loc)
         # drop bad sta
-        todel = [sta for sta in pick_dict if sta not in data_dict]
-        for sta in todel: pick_dict.pop(sta)
+        todel = [net_sta for net_sta in pick_dict if net_sta not in data_dict]
+        for net_sta in todel: pick_dict.pop(net_sta)
         if len(pick_dict)<min_sta: continue
 
-        # for each station, calc masked cc traces
+        # 1. calc shifted cc traces for all sta
         cc_holder = torch.zeros([len(pick_dict), int(86400*samp_rate)])
         cc = calc_cc_traces(cc_holder, pick_dict, data_dict, trig_thres, mask_len)
+        # 2. mask cc traces with peak cc values
         cc_masked = [mask_cc(cci, trig_thres, mask_len) for cci in cc]
-        # detect with stacked cc trace
+        # 3. detect on stacked cc trace
         cc_stack = np.sum(cc_masked, axis=0) / len(cc_masked)
 #        plt.plot(cc_stack); plt.show()
         det_ots = det_cc_stack(cc_stack, trig_thres, mask_len)
         print('{} detections | time {:.2f}s'.format(len(det_ots), time.time()-t))
         if len(det_ots)==0: continue
 
-        # ppk by cc
+        # 4. ppk by cc
         print('pick p&s by corr')
         for [det_ot, det_cc] in det_ots:
             picks = ppk_cc(det_ot, pick_dict, data_dict, win_p, win_s, picker, mask_len)

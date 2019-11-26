@@ -10,7 +10,7 @@ def calc_cc_gpu(data_mat, temp_mat, norm_data_mat, norm_temp_vec):
     """ Cala CC trace by GPU cuda
     """
     num_sta, len_data = data_mat.shape
-    _, len_temp = temp_mat.shape
+    _,       len_temp = temp_mat.shape
     data_mat = data_mat.view([1, num_sta, len_data])
     temp_mat = temp_mat.view([num_sta, 1, len_temp])
     cc = F.conv1d(data_mat, temp_mat, groups=num_sta)[0]
@@ -30,7 +30,7 @@ def calc_cc(data, temp, norm_data=None, norm_temp=None):
     """
     ntemp, ndata = len(temp), len(data)
     if ntemp>ndata: return [0]
-    if not norm_temp: 
+    if not norm_temp:
         norm_temp = np.sqrt(np.sum(temp**2))
     if not norm_data:
         data_cum = np.cumsum(data**2)
@@ -45,12 +45,9 @@ def calc_cc(data, temp, norm_data=None, norm_temp=None):
 def calc_cc_traces(cc_holder, pick_dict, data_dict, trig_thres, mask_len):
 
     t=time.time()
-    # 1. calc cc (GPU)
-    # make input matrix
     data_list, temp_list, dt_list = [], [], []
-    for sta, [temp, norm_temp, _, _, dt_ot] in pick_dict.items():
-        # get data
-        data_tensor, norm_data = data_dict[sta]
+    for net_sta, [temp, norm_temp, _, _, dt_ot] in pick_dict.items():
+        data_tensor, norm_data = data_dict[net_sta]
         data_list.append([data_tensor, norm_data])
         temp_list.append([temp[0], norm_temp[0]])
         dt_list.append(dt_ot)
@@ -59,7 +56,7 @@ def calc_cc_traces(cc_holder, pick_dict, data_dict, trig_thres, mask_len):
     return cc.cpu().numpy()
 
 
-# 1. calc cc trace & time shift
+# 1. calc cc trace & time shift to ot
 def calc_shifted_cc(cc_holder, data_list, temp_list, dt_list):
 
   for i in range(3):
@@ -122,10 +119,10 @@ def det_cc_stack(cc_stack, trig_thres, mask_len):
 def ppk_cc(det_ot, pick_dict, data_dict, win_p, win_s, picker, mask_len):
 
   picks = []
-  for sta, [temp, norm_temp, ttp, tts, _] in pick_dict.items():
+  for net_sta, [temp, norm_temp, ttp, tts, _] in pick_dict.items():
 
     # get data
-    st_tensor, _ = data_dict[sta]
+    st_tensor, _ = data_dict[net_sta]
     # org tp & ts (in idx)
     tp0, ts0 = int(det_ot+ttp), int(det_ot+tts)
     # cut p&s data (by points)
@@ -138,9 +135,9 @@ def ppk_cc(det_ot, pick_dict, data_dict, win_p, win_s, picker, mask_len):
 
     # ppk by cc
     temp_p, temp_s = temp[1][0].numpy(), temp[2][0].numpy()
-    cc_p  = calc_cc(st_p[2], temp_p[2], None, norm_temp[1][2].numpy())
-    cc_s0 = calc_cc(st_s[0], temp_s[0], None, norm_temp[2][0].numpy())
-    cc_s1 = calc_cc(st_s[1], temp_s[1], None, norm_temp[2][1].numpy())
+    cc_p  = calc_cc(st_p[2], temp_p[2], norm_temp=norm_temp[1][2].numpy())
+    cc_s0 = calc_cc(st_s[0], temp_s[0], norm_temp=norm_temp[2][0].numpy())
+    cc_s1 = calc_cc(st_s[1], temp_s[1], norm_temp=norm_temp[2][1].numpy())
     # tp & ts (in idx)
     tp = tp0 + np.argmax(cc_p) - mask_len
     ts = ts0 + (np.argmax(cc_s0) + np.argmax(cc_s1))/2. - 2*mask_len
@@ -151,7 +148,7 @@ def ppk_cc(det_ot, pick_dict, data_dict, win_p, win_s, picker, mask_len):
     amp = [picker.get_amp(tr)**2 for tr in st_s]
     s_amp = np.sqrt(sum(amp))
     # add pick
-    picks.append([sta, tp, ts, s_amp, cc_p_max, cc_s_max])
+    picks.append([net_sta, tp, ts, s_amp, cc_p_max, cc_s_max])
   return picks
 
 
