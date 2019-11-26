@@ -115,12 +115,8 @@ class Data(Dataset):
     stream_paths = self.data_dict[sta]
     stream = read_stream(stream_paths)
     start_time = stream[0].stats.starttime
-    # if poor data clean
     end_time = stream[0].stats.endtime
-    date_dev = UTCDateTime(end_time.date) - UTCDateTime(start_time.date)
-    if date_dev==2*86400:
-        start_time = UTCDateTime(start_time.date) + 86400
-    date = UTCDateTime(start_time.date)
+    date = UTCDateTime((start_time + (end_time - start_time)/2).date)
 
     # get stream data (np.array)
     data_holder = np.zeros([3,int(86400*samp_rate+1)])
