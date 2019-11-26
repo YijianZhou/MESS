@@ -16,9 +16,8 @@ sys.path.append('/home/zhouyj/software/data_prep')
 sys.path.append('/home/zhouyj/software/PAD')
 import argparse
 import numpy as np
-from obspy.core import read, UTCDateTime
+from obspy import read, UTCDateTime
 import sac
-import pickers
 import data_pipeline as dp
 import config
 
