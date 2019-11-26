@@ -49,7 +49,7 @@ if __name__ == '__main__':
   min_sta = cfg.min_sta
   trig_thres = cfg.trig_thres
   mask_len = int(samp_rate * cfg.mask_len)
-  picker = pickers.Trad_PS()
+  picker = pickers.Trad_PS(samp_rate=samp_rate)
 
   # i/o file
   out_ctlg = open(args.out_ctlg,'w')
