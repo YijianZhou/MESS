@@ -42,7 +42,8 @@ def calc_cc(data, temp, norm_data=None, norm_temp=None):
     return cc
 
 
-def calc_cc_traces(cc_holder, pick_dict, data_dict, trig_thres, mask_len):
+# 1. calc cc trace & time shift to ot
+def calc_cc_traces(cc_holder, pick_dict, data_dict):
 
     t=time.time()
     data_list, temp_list, dt_list = [], [], []
@@ -56,16 +57,14 @@ def calc_cc_traces(cc_holder, pick_dict, data_dict, trig_thres, mask_len):
     return cc.cpu().numpy()
 
 
-# 1. calc cc trace & time shift to ot
 def calc_shifted_cc(cc_holder, data_list, temp_list, dt_list):
 
+  # corr with GPU
   for i in range(3):
-    # data_mat
     data_mat = torch.cat([datai[:,i] for [datai,_] in data_list]).cuda()
     temp_mat = torch.cat([tempi[:,i] for [tempi,_] in temp_list]).cuda()
     norm_data = torch.cat([normi[i] for [_,normi] in data_list]).cuda()
     norm_temp = torch.tensor([normi[i] for [_,normi] in temp_list], dtype=torch.double).cuda()
-    # calc cc traces (mat) with GPU
     if i==0: cc  = calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
     else:    cc += calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
   cc /= 3.
@@ -80,13 +79,12 @@ def calc_shifted_cc(cc_holder, data_list, temp_list, dt_list):
 # 2. mask cc trace
 @jit
 def mask_cc(cc, trig_thres, mask_len):
-  # cc mask
   trig_idxs = np.where(cc>trig_thres)[0]
   slide_idx = 0
   for trig_idx in trig_idxs:
-    # mask cc with peak ccs
     if trig_idx < slide_idx: continue
-    cc_trig = cc[trig_idx : trig_idx+mask_len]
+    # mask cc with peak ccs
+    cc_trig = cc[trig_idx : trig_idx+2*mask_len]
     cc_max = np.amax(cc_trig)
     idx_max = trig_idx + np.argmax(cc_trig)
     idx0 = max(0, idx_max - mask_len//2)
@@ -105,9 +103,9 @@ def det_cc_stack(cc_stack, trig_thres, mask_len):
   dets = []
   for det_idx in det_idxs:
     if det_idx < slide_idx: continue
-    # det ot
+    # det ot (in idx)
     cc_det = cc_stack[det_idx : det_idx+2*mask_len]
-    cc_max  = np.amax(cc_det)
+    cc_max = np.amax(cc_det)
     idx_max = det_idx + int(np.median(np.where(cc_det == cc_max)[0]))
     dets.append([idx_max, cc_max])
     # next detection

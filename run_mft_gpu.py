@@ -83,11 +83,12 @@ if __name__ == '__main__':
         # drop bad sta
         todel = [net_sta for net_sta in pick_dict if net_sta not in data_dict]
         for net_sta in todel: pick_dict.pop(net_sta)
-        if len(pick_dict)<min_sta: continue
+        num_sta = len(pick_dict)
+        if num_sta<min_sta: continue
 
         # 1. calc shifted cc traces for all sta
-        cc_holder = torch.zeros([len(pick_dict), int(86400*samp_rate)])
-        cc = calc_cc_traces(cc_holder, pick_dict, data_dict, trig_thres, mask_len)
+        cc_holder = torch.zeros([num_sta, int(86400*samp_rate)])
+        cc = calc_cc_traces(cc_holder, pick_dict, data_dict)
         # 2. mask cc traces with peak cc values
         cc_masked = [mask_cc(cci, trig_thres, mask_len) for cci in cc]
         # 3. detect on stacked cc trace
