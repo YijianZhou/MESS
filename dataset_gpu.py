@@ -34,7 +34,6 @@ def preprocess(st):
         freqmax = freq_band[2]
         return st.filter(flt_type, freqmin=freqmin, freqmax=freqmax)
 
-
 # read 3 chn stream & prep
 def read_stream(stream_paths):
     stream  = read(stream_paths[0])
@@ -52,7 +51,6 @@ def st2np(stream):
 
 def st2cuda(stream):
     return np2cuda(st2np(stream))
-
 
 
 class Templates(Dataset):
@@ -98,7 +96,6 @@ class Templates(Dataset):
     return len(self.event_list)
 
 
-
 class Data(Dataset):
 
   def __init__(self, data_dict):
@@ -132,7 +129,6 @@ class Data(Dataset):
 
   def __len__(self):
     return len(self.sta_list)
-
 
 
 """ Read Template Data
@@ -202,4 +198,3 @@ def read_data(data_dict):
         data_dict[sta[0]] = outi
         print('read {} | time {:.1f}s'.format(sta[0], time.time()-t))
     return data_dict
-
