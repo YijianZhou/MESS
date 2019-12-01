@@ -53,7 +53,6 @@ chn_codes = args.chn_codes.split(',')
 pha_dict = {}
 for line in lines:
   codes = line.split(',')
-  if codes[0][0:5]=='2017-': continue
   if len(codes)==5:
     event_name = codes[0]
     ot = UTCDateTime(codes[0])
@@ -93,4 +92,3 @@ for i,event_name in enumerate(pha_dict):
         sac.ch_event(out_paths[0], lon, lat, dep, mag, [t0,t1])
         sac.ch_event(out_paths[1], lon, lat, dep, mag, [t0,t1])
         sac.ch_event(out_paths[2], lon, lat, dep, mag, [t0,t1])
-
