@@ -49,6 +49,7 @@ def msms_det(temp_pick_dict, data_dict):
     cc_masked = [mask_cc(cci) for cci in cc]
     # 4. stack & detect
     cc_stack = np.sum(cc_masked, axis=0) / len(cc_masked)
+#    plt.plot(cc_stack); plt.show()
     dets = det_cc_stack(cc_stack)
     print('{} dets, {} sta, {:.1f}s'.format(len(dets), num_sta, time.time()-t))
     return dets
@@ -141,7 +142,10 @@ def match_filter(data_list, temp_list):
         norm_temp = cpu2cuda(torch.tensor([normi[i] for [_,normi] in temp_list]))
         if i==0: cc_mat  = calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
         else:    cc_mat += calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
-    return (cc_mat/3.).cpu().numpy()
+    cc_mat = (cc_mat/3.).cpu().numpy()
+    cc_mat[np.isinf(cc_mat)] = 0.
+    cc_mat[np.isnan(cc_mat)] = 0.
+    return cc_mat
 
 
 # 2. shift time shift to ot
