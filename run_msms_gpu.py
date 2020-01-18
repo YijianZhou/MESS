@@ -76,9 +76,10 @@ if __name__ == '__main__':
         for [det_ot, det_cc] in dets:
             picks = corr_ppk(det_ot, temp_pick_dict, data_dict)
             det_ot = date + det_ot
+            print('det_ot {}, det_cc {:.2f}'.format(det_ot, det_cc))
             for i in range(len(picks)):
                 picks[i][1:3] = [date + dt for dt in picks[i][1:3]]
-            print('det_ot {}, det_cc {:.2f}'.format(det_ot, det_cc))
+                print('{0[0]} {0[1]} {0[2]} {0[4]:.3f},{0[5]:.3f}'.format(picks[i]))
             write_ctlg(det_ot, det_cc, temp_name, temp_loc, out_ctlg)
             write_pha(det_ot, det_cc, temp_name, temp_loc, picks, out_pha)
 
