@@ -7,6 +7,8 @@ import config
 
 # params
 cfg = config.Config()
+get_data_dict = cfg.get_data_dict
+num_workers = cfg.num_workers
 samp_rate = cfg.samp_rate
 freq_band = cfg.freq_band
 temp_win_trig = cfg.temp_win_trig
@@ -17,7 +19,7 @@ temp_win_npts = [int(sum(win) * samp_rate) for win in [temp_win_trig, temp_win_p
 npts_trig =  temp_win_npts[0] # for data norm
 
 
-def read_data(data_dict):
+def read_data(date, data_dir):
     """ Read continuous data
     Inputs
       data_dict = {sta: stream_paths}
@@ -26,8 +28,9 @@ def read_data(data_dict):
     """
     t=time.time()
     print('reading continuous data')
+    data_dict = get_data_dict(data_dir, date)
     data_dataset = Data(data_dict)
-    data_loader = DataLoader(data_dataset, num_workers=10, batch_size=None, pin_memory=True)
+    data_loader = DataLoader(data_dataset, num_workers=num_workers, batch_size=None, pin_memory=True)
     for i, (sta, datai) in enumerate(data_loader):
         data_dict[sta] = [datai[0]] + [cpu2cuda(di) for di in datai]
         print('read {} | time {:.1f}s'.format(sta, time.time()-t))
@@ -73,7 +76,7 @@ def read_temp(temp_pha, temp_root):
     t=time.time()
     todel = []
     temp_dataset = Templates(temp_dict)
-    temp_loader = DataLoader(temp_dataset, num_workers=10, batch_size=None, pin_memory=True)
+    temp_loader = DataLoader(temp_dataset, num_workers=num_workers, batch_size=None, pin_memory=True)
     for i, (temp_name, temp_pick_dict) in enumerate(temp_loader):
         if len(temp_pick_dict)<min_sta: todel.append(temp_name)
         temp_loc = temp_dict[temp_name][1]

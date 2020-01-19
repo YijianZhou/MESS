@@ -36,7 +36,6 @@ if __name__ == '__main__':
   # MSMS params
   cfg = config.Config()
   min_sta = cfg.min_sta
-  get_data_dict = cfg.get_data_dict
 
   # i/o paths
   out_ctlg = open(args.out_ctlg,'w')
@@ -51,15 +50,13 @@ if __name__ == '__main__':
   # for all days
   num_day = (end_date.date - start_date.date).days
   for day_idx in range(num_day):
-    date = start_date + day_idx*86400
-    torch.cuda.empty_cache()
-
     # read data
+    torch.cuda.empty_cache()
+    date = start_date + day_idx*86400
     print('-'*40)
     print('detecting %s'%date.date)
-    data_dict = get_data_dict(args.data_dir, date)
-    if data_dict=={}: continue
-    data_dict = read_data(data_dict)
+    data_dict = read_data(date, args.data_dir)
+    if len(data_dict)<min_sta: continue
 
     # for all templates
     for temp_name, [temp_loc, temp_pick_dict] in temp_dict.items():
