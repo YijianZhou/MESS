@@ -192,7 +192,7 @@ def read_stream(stream_paths):
     stream += read(stream_paths[2])
     # change header
     net = os.path.split(stream_paths[0])[-1].split('.')[0]
-    for i in range(3): stream[i].stats.calib = resp_dict[net]
+    for i in range(3): stream[i].data /= resp_dict[net]
     return preprocess(stream)
 
 def trim_stream(stream, start_time, end_time):
@@ -204,7 +204,7 @@ def cpu2cuda(data):
     return data.float().cuda(non_blocking=True)
 
 def st2np(stream):
-    return np.array([trace.data / trace.stats.calib for trace in stream], dtype=np.float64)
+    return np.array([trace.data for trace in stream], dtype=np.float64)
 
 def dtime2str(dtime):
     date = ''.join(str(dtime).split('T')[0].split('-'))
