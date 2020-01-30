@@ -19,9 +19,8 @@ class Config(object):
     self.dep_corr = 5 # avoid air quake
     self.ot_dev = 3 # ot diff for det assoc
     self.cc_thres = 0.3 # select high cc event pairs
-    resp_dict = {'JZ':1e5}
     self.fcsv = 'output/zsy_msms_reloc.csv'
-    dp = dps.Data(resp_dict)
+    dp = dps.Data(None)
     sta_dict = dp.get_sta_dict(self.fsta_in)
     self.associator = associators.TS_Assoc(sta_dict)
     if not os.path.exists('input'): os.makedirs('input')
