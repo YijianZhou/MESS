@@ -4,9 +4,9 @@ import torch.nn.functional as F
 from scipy.signal import correlate
 import numpy as np
 from numba import jit
+import matplotlib.pyplot as plt
 from dataset_gpu import cpu2cuda
 import config
-
 
 # MSMS params
 cfg = config.Config()
@@ -48,6 +48,7 @@ def msms_det(temp_pick_dict, data_dict):
     cc_masked = [mask_cc(cci) for cci in cc]
     # 4. stack & detect
     cc_stack = np.sum(cc_masked, axis=0) / len(cc_masked)
+#    plt.plot(cc_stack); plt.show()
     dets = det_cc_stack(cc_stack)
     print('{} dets, {} sta, {:.1f}s'.format(len(dets), num_sta, time.time()-t))
     return dets
@@ -95,9 +96,10 @@ def corr_ppk(det_ot, temp_pick_dict, data_dict):
     return picks
 
 
+""" Base functions
+"""
+
 def calc_cc_gpu(data_mat, temp_mat, norm_data_mat, norm_temp_vec):
-    """ Cala CC trace by GPU cuda
-    """
     num_sta, len_data = data_mat.shape
     _,       len_temp = temp_mat.shape
     data_mat = data_mat.view([1, num_sta, len_data])
@@ -109,14 +111,6 @@ def calc_cc_gpu(data_mat, temp_mat, norm_data_mat, norm_temp_vec):
 
 
 def calc_cc(data, temp, norm_data=None, norm_temp=None):
-    """ Calc CC trace by CPU
-    Inputs
-      data (np): continuous data
-      temp (np): template waveform
-      norm_data & norm_temp
-    Outputs
-      cc: cross-correlation function
-    """
     ntemp, ndata = len(temp), len(data)
     if ntemp>ndata: return [0]
     if not norm_temp:

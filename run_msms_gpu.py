@@ -36,11 +36,10 @@ if __name__ == '__main__':
   # MSMS params
   cfg = config.Config()
   min_sta = cfg.min_sta
-
   # i/o paths
   out_ctlg = open(args.out_ctlg,'w')
   out_pha = open(args.out_pha,'w')
-  temp_dict = read_temp(args.temp_pha, args.temp_root)
+  temp_list = read_temp(args.temp_pha, args.temp_root)
 
   # get date range
   start_date, end_date = [UTCDateTime(date) for date in args.date_range.split('-')]
@@ -59,9 +58,9 @@ if __name__ == '__main__':
     if len(data_dict)<min_sta: continue
 
     # for all templates
-    for temp_name, [temp_loc, temp_pick_dict] in temp_dict.items():
+    for [temp_name, temp_loc, temp_pick_dict] in temp_list:
         # get pick 
-        print('template name (ot):', temp_name)
+        print('template {}'.format(temp_name))
         todel = [net_sta for net_sta in temp_pick_dict if net_sta not in data_dict]
         for net_sta in todel: temp_pick_dict.pop(net_sta)
         if len(temp_pick_dict)<min_sta: continue

@@ -1,94 +1,78 @@
-""" Cut template data
-  Use original catalog as template events, cut into SSD for fast i/o
-  Input
+""" Cut template waveform
+  Inputs
     data_dir: dir of continuous data
-    pha_path: phase file of original catalog
+    temp_pha: phase file of original catalog
     out_root: root dir for output
     temp_root: name for template data (root dir)
-    chn_codes: channel codes sequence, seperated by comma
-  Output
+  Outputs
     temp_root/temp_name/net.sta.chn
-    Note: temp_name == ot (yyyymmddhhmmss)
+    Note: temp_name == ot (yyyymmddhhmmss.ss)
 """
 
 import os, sys, glob, shutil
 sys.path.append('/home/zhouyj/software/data_prep')
-sys.path.append('/home/zhouyj/software/PAD')
 import argparse
 import numpy as np
+import multiprocessing as mp
 from obspy import read, UTCDateTime
 import sac
-import data_pipeline as dp
 import config
+from dataset_gpu import read_pha, dtime2str
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str,
                         default='/data3/luwf_data/Trace/Linear_Pad/*')
-    parser.add_argument('--pha_path', type=str,
+    parser.add_argument('--temp_pha', type=str,
                         default='/data3/luwf_data/Trace/JZG_temp/jzg_temp.pha')
     parser.add_argument('--out_root', type=str,
                         default='./output/tmp')
     parser.add_argument('--temp_root', type=str,
                         default='Templates')
-    parser.add_argument('--chn_codes', type=str,
-                        default='HHE,HHN,HHZ')
     args = parser.parse_args()
 
 
 # i/o files
-data_dir = args.data_dir
-pha_path = args.pha_path
-f=open(pha_path); lines=f.readlines(); f.close()
-out_root = args.out_root
-temp_root = os.path.join(out_root, args.temp_root)
+temp_root = os.path.join(args.out_root, args.temp_root)
+if not os.path.exists(temp_root): os.makedirs(temp_root)
+pha_list = read_pha(args.temp_pha)
 # cut params
 cfg = config.Config()
 t_blank = cfg.t_blank # sec before tp (cut win)
 win_len = cfg.win_len # sec
-chn_codes = args.chn_codes.split(',')
+chn_dict = cfg.chn_dict
+get_data_dict = cfg.get_data_dict
 
-
-# make phase dict
-pha_dict = {}
-for line in lines:
-  codes = line.split(',')
-  if len(codes)==5:
-    event_name = codes[0]
-    ot = UTCDateTime(codes[0])
-    lat, lon, dep, mag = [float(code) for code in codes[1:]]
-    header = [ot, lat, lon, dep, mag]
-    pha_dict[event_name] = [header, []]
-  else:
-    net, sta = codes[0:2]
-    tp, ts = [UTCDateTime(code) for code in codes[2:4]]
-    pha_dict[event_name][1].append([net, sta, tp, ts])
-
-
-# cut all events data
-for i,event_name in enumerate(pha_dict):
-
-    # event info
-    [header, picks] = pha_dict[event_name]
-    ot, lat, lon, dep, mag = header
-    data_dict = dp.get_jz(data_dir, ot)
+def cut_event(event_id):
+    # get event info
+    [event_loc, pick_dict] = pha_list[event_id]
+    ot, lat, lon, dep, mag = event_loc
+    data_dict = get_data_dict(args.data_dir, ot)
+    event_name = dtime2str(ot)
     event_dir = os.path.join(temp_root, event_name)
     if not os.path.exists(event_dir): os.makedirs(event_dir)
-    if i%10==0: print('cutting {}th event'.format(i))
 
-    for pick in picks:
-        net, sta, tp, ts = pick
+    # cut event
+    print('cutting {}'.format(event_name))
+    for net_sta, [tp, ts] in pick_dict.items():
+        chn_codes = chn_dict[net_sta.split('.')[0]]
         b = tp - UTCDateTime(ot.date) - t_blank
-        data_paths = data_dict[sta]
-        out_paths = [os.path.join(event_dir,'%s.%s.%s'%(net,sta,chn)) for chn in chn_codes]
+        data_paths = data_dict[net_sta]
+        out_paths = [os.path.join(event_dir,'%s.%s'%(net_sta,chn)) for chn in chn_codes]
         # cut event
         sac.cut(data_paths[0], b, b+win_len, out_paths[0])
         sac.cut(data_paths[1], b, b+win_len, out_paths[1])
         sac.cut(data_paths[2], b, b+win_len, out_paths[2])
-
         # write header
         t0 = t_blank
         t1 = ts -tp + t_blank
         sac.ch_event(out_paths[0], lon, lat, dep, mag, [t0,t1])
         sac.ch_event(out_paths[1], lon, lat, dep, mag, [t0,t1])
         sac.ch_event(out_paths[2], lon, lat, dep, mag, [t0,t1])
+
+# cut all events data
+pool = mp.Pool(processes=10)
+pool.map_async(cut_event, range(len(pha_list)))
+pool.close()
+pool.join()
+

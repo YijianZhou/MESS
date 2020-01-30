@@ -9,6 +9,7 @@ import config
 cfg = config.Config()
 get_data_dict = cfg.get_data_dict
 num_workers = cfg.num_workers
+resp_dict = cfg.resp_dict
 samp_rate = cfg.samp_rate
 freq_band = cfg.freq_band
 temp_win_trig = cfg.temp_win_trig
@@ -28,10 +29,10 @@ def read_data(date, data_dir):
     """
     t=time.time()
     print('reading continuous data')
-    data_dict = get_data_dict(data_dir, date)
+    data_dict = get_data_dict(date, data_dir)
     data_dataset = Data(data_dict)
     data_loader = DataLoader(data_dataset, num_workers=num_workers, batch_size=None, pin_memory=True)
-    for i, (sta, datai) in enumerate(data_loader):
+    for (sta, datai) in data_loader:
         data_dict[sta] = [datai[0]] + [cpu2cuda(di) for di in datai]
         print('read {} | time {:.1f}s'.format(sta, time.time()-t))
     return data_dict
@@ -45,9 +46,9 @@ def read_temp(temp_pha, temp_root):
         phase line: net, sta, tp, ts, s_amp, p_snr, s_snr
       temp_root: root dir for template data
         temp_root/temp_name/net.sta.chn
-        *note: temp_name == ot (yyyymmddhhmmss.ss)
+        *note: temp_name == ot in yyyymmddhhmmss.ss
     Outputs
-      temp_dict = {temp_name: [temp_loc, temp_pick_dict]}
+      temp_list = [temp_name, temp_loc, temp_pick_dict]
       temp_pick_dict[net_sta] = [temp, norm_temp, dt_list]
       temp = [temp_trig, temp_p, temp_s]
       norm_temp = [norm_trig, norm_p, norm_s]
@@ -55,35 +56,20 @@ def read_temp(temp_pha, temp_root):
     """
     # 1. read phase file
     print('reading template phase file')
-    f=open(temp_pha); lines=f.readlines(); f.close()
-    temp_dict = {}
-    for line in lines:
-        codes = line.split(',')
-        if len(codes)==5:
-            temp_name = codes[0]
-            temp_dir = os.path.join(temp_root, temp_name)
-            ot = UTCDateTime(codes[0])
-            lat, lon, dep = [float(code) for code in codes[1:4]]
-            temp_loc = [ot, lat, lon, dep]
-            temp_dict[temp_name] = [temp_dir, temp_loc, {}]
-        else:
-            net_sta = '.'.join(codes[0:2])
-            tp, ts = [UTCDateTime(code) for code in codes[2:4]]
-            temp_dict[temp_name][-1][net_sta] = [tp, ts]
+    temp_list = read_pha(temp_pha)
 
     # 2. read temp data
     print('reading templates')
     t=time.time()
     todel = []
-    temp_dataset = Templates(temp_dict)
+    temp_dataset = Templates(temp_list, temp_root)
     temp_loader = DataLoader(temp_dataset, num_workers=num_workers, batch_size=None, pin_memory=True)
-    for i, (temp_name, temp_pick_dict) in enumerate(temp_loader):
-        if len(temp_pick_dict)<min_sta: todel.append(temp_name)
-        temp_loc = temp_dict[temp_name][1]
-        temp_dict[temp_name] = [temp_loc, temp_pick_dict]
+    for i, [temp_name, temp_pick_dict] in enumerate(temp_loader):
+        if len(temp_pick_dict) < min_sta: todel.append(i)
+        temp_list[i] = [temp_name, temp_list[i][0], temp_pick_dict]
         if i%100==0: print('{}th template | time {:.1f}s'.format(i, time.time()-t))
-    for temp_name in todel: temp_dict.pop(temp_name)
-    return temp_dict
+    for i in todel: del temp_list[i]
+    return temp_list
 
 
 class Data(Dataset):
@@ -116,15 +102,17 @@ class Data(Dataset):
 class Templates(Dataset):
   """ Dataset for reading templates
   """
-  def __init__(self, temp_dict):
-    self.temp_dict = temp_dict
-    self.temp_list = sorted(list(temp_dict.keys()))
+  def __init__(self, temp_list, temp_root):
+    self.temp_list = temp_list
+    self.temp_root = temp_root
 
   def __getitem__(self, index):
     # read one template
-    temp_name = self.temp_list[index]
-    temp_dir, temp_loc, pick_dict_ppk = self.temp_dict[temp_name]
+    temp_loc, pick_dict_ppk = self.temp_list[index]
     ot = temp_loc[0]
+    ot_name = dtime2str(ot)
+    temp_dir = os.path.join(self.temp_root, ot_name)
+    temp_name = '{}_{}'.format(index, ot_name)
 
     # read data
     pick_dict_data = {}
@@ -157,6 +145,24 @@ class Templates(Dataset):
 """ Base functions
 """
 
+# file reading
+def read_pha(fpha):
+    f=open(fpha); lines=f.readlines(); f.close()
+    pha_list = []
+    for line in lines:
+        codes = line.split(',')
+        if len(codes)==5:
+            ot = UTCDateTime(codes[0])
+            lat, lon, dep, mag = [float(code) for code in codes[1:]]
+            event_loc = [ot, lat, lon, dep, mag]
+            pha_list.append([event_loc, {}])
+        else:
+            net_sta = '.'.join(codes[0:2])
+            tp, ts = [UTCDateTime(code) for code in codes[2:4]]
+            pha_list[-1][-1][net_sta] = [tp, ts]
+    return pha_list
+
+
 # stream processing
 def preprocess(stream):
     # time alignment
@@ -184,6 +190,9 @@ def read_stream(stream_paths):
     stream  = read(stream_paths[0])
     stream += read(stream_paths[1])
     stream += read(stream_paths[2])
+    # change header
+    net = os.path.split(stream_paths[0])[-1].split('.')[0]
+    for i in range(3): stream[i].stats.calib = resp_dict[net]
     return preprocess(stream)
 
 def trim_stream(stream, start_time, end_time):
@@ -195,5 +204,10 @@ def cpu2cuda(data):
     return data.float().cuda(non_blocking=True)
 
 def st2np(stream):
-    return np.array([trace.data for trace in stream], dtype=np.float64)
+    return np.array([trace.data / trace.stats.calib for trace in stream], dtype=np.float64)
+
+def dtime2str(dtime):
+    date = ''.join(str(dtime).split('T')[0].split('-'))
+    time = ''.join(str(dtime).split('T')[1].split(':'))[0:9]
+    return date + time
 
