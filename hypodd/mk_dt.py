@@ -84,7 +84,7 @@ def write_dt(det, evid, fout):
     temp_id, temp_ot = temp[0], temp[1][0]
     fout.write('# {:9} {:9} 0.0\n'.format(evid, temp_id))
     for net_sta, [tp, ts, _, cc_p, cc_s] in det['picks'].items():
-        sta = net_sta.split('.')[0]
+        sta = net_sta.split('.')[1]
         temp_tp, temp_ts  = temp[-1][net_sta]
         temp_ttp, temp_tts = temp_tp-temp_ot, temp_ts-temp_ot
         det_ttp, det_tts = tp-det_ot, ts-det_ot
