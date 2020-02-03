@@ -38,6 +38,7 @@ if not os.path.exists(temp_root): os.makedirs(temp_root)
 pha_list = read_pha(args.temp_pha)
 # cut params
 cfg = config.Config()
+num_workers = cfg.num_workers
 t_blank = cfg.t_blank # sec before tp (cut win)
 win_len = cfg.win_len # sec
 chn_dict = cfg.chn_dict
@@ -47,7 +48,8 @@ def cut_event(event_id):
     # get event info
     [event_loc, pick_dict] = pha_list[event_id]
     ot, lat, lon, dep, mag = event_loc
-    data_dict = get_data_dict(args.data_dir, ot)
+    ot = UTCDateTime(ot)
+    data_dict = get_data_dict(ot, args.data_dir)
     event_name = dtime2str(ot)
     event_dir = os.path.join(temp_root, event_name)
     if not os.path.exists(event_dir): os.makedirs(event_dir)
@@ -71,7 +73,7 @@ def cut_event(event_id):
         sac.ch_event(out_paths[2], lon, lat, dep, mag, [t0,t1])
 
 # cut all events data
-pool = mp.Pool(processes=10)
+pool = mp.Pool(num_workers)
 pool.map_async(cut_event, range(len(pha_list)))
 pool.close()
 pool.join()
