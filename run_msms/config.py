@@ -19,14 +19,17 @@ class Config(object):
     self.temp_win_trig = [1., 9.] # win fr trig temp cut, rel p
     self.temp_win_p = [0.5,1.5]   # win for p temp cut, rel p 
     self.temp_win_s = [0, 2.]     # win for s temp cut, rel s
-    self.trig_thres = 0.25         # cc thres for det & mask
+    self.trig_thres = 0.25        # cc thres for det & mask
     self.mask_len = 1.            # win len for cc mask
     self.det_gap = 5.             # gap sec for detection
     self.ppk_win_p = [1., 1.]     # win for p pick
     self.ppk_win_s = [2., 2.]     # win for s pick
 
     # data process
+    self.resp_dict = {'ZSY': 3.02e8,
+                      'YN': 1.67785e9,
+                      'XLS': 1/1.6e-9}  # instrumental gain (cnt/m/s)
     self.samp_rate = 50
     self.freq_band = ['bandpass', [1., 40.]]
     self.picker = pickers.Trad_PS(self.samp_rate)
-    self.num_workers = 10
+    self.num_workers = 5
