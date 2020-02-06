@@ -27,8 +27,9 @@ class Config(object):
 
     # data process
     self.resp_dict = {'ZSY': 3.02e8,
-                      'YN': 1.67785e9}  # instrumental gain (cnt/m/s)
+                      'YN': 1.67785e9,
+                      'XLS': 1/1.6e-9}  # instrumental gain (cnt/m/s)
     self.samp_rate = 50
     self.freq_band = ['bandpass', [1., 40.]]
     self.picker = pickers.Trad_PS(self.samp_rate)
-    self.num_workers = 10
+    self.num_workers = 5
