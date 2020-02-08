@@ -37,7 +37,6 @@ def mk_temp_dict():
         codes = line.split(',')
         if len(codes)==6:
             temp_name = codes[0]
-            codes[1] = codes[1][0:12]+'59.999' if codes[1][12:14]=='60' else codes[1]
             ot = UTCDateTime(codes[1])
             lat, lon, dep = [float(code) for code in codes[2:5]]
             temp_loc = [ot, lat, lon, dep]
