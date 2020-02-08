@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from scipy.signal import correlate
 import numpy as np
 from numba import jit
-import matplotlib.pyplot as plt
 from dataset_gpu import cpu2cuda
 import config
 
@@ -48,7 +47,6 @@ def msms_det(temp_pick_dict, data_dict):
     cc_masked = [mask_cc(cci) for cci in cc]
     # 4. stack & detect
     cc_stack = np.sum(cc_masked, axis=0) / len(cc_masked)
-#    plt.plot(cc_stack); plt.show()
     dets = det_cc_stack(cc_stack)
     print('{} dets, {} sta, {:.1f}s'.format(len(dets), num_sta, time.time()-t))
     return dets
@@ -90,8 +88,8 @@ def corr_ppk(det_ot, temp_pick_dict, data_dict):
         cc_s_max = (np.amax(cc_s0) + np.amax(cc_s1)) / 2.
 
         # 2. get amplitude
-        amp = [picker.get_amp(tr)**2 for tr in data_s]
-        s_amp = np.sqrt(sum(amp))
+        amp_xyz = np.array([picker.get_amp(tr) for tr in data_s])
+        s_amp = np.linalg.norm(amp_xyz)
         picks.append([net_sta, tp, ts, s_amp, cc_p_max, cc_s_max])
     return picks
 
