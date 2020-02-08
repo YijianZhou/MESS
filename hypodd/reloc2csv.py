@@ -17,6 +17,7 @@ for line in lines:
     mag = codes[16]
     # get time info
     year, mon, day, hour, mnt, sec = codes[10:16]
+    sec = '59.999' if sec=='60.000' else sec
     ot = '{}{:0>2}{:0>2}{:0>2}{:0>2}{:0>6}'.format(year, mon, day, hour, mnt, sec)
     out_csv.write('{},{},{},{},{}\n'.format(ot, lat, lon, dep, mag))
 
