@@ -31,5 +31,5 @@ class Config(object):
                       'XLS': 1/1.6e-9}  # instrumental gain (cnt/m/s)
     self.samp_rate = 50
     self.freq_band = ['bandpass', [1., 40.]]
-    self.picker = pickers.Trad_PS(self.samp_rate)
+    self.picker = pickers.Trad_PS(samp_rate=self.samp_rate)
     self.num_workers = 5
