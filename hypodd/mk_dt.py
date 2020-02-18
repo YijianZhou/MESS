@@ -104,7 +104,7 @@ def write_event(event_loc, evid, fout):
 
 # calc mag with PAD assoc
 def calc_mag(event):
-    event_loc = {'evt_lat':event['loc'][1], 'evt_lon':event['loc'][2]}
+    event_loc = {'evt_lat':event['loc'][0], 'evt_lon':event['loc'][1]}
     event_pick = [{'net_sta':net_sta, 's_amp':s_amp} \
         for net_sta, [_,_,s_amp,_,_] in event['picks'].items()]
     event_loc = associator.calc_mag(event_pick, event_loc)
