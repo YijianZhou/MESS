@@ -7,7 +7,7 @@ import config
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--date_range', type=str,
-                        default='20180325-20190201')
+                        default='20190704-20190705')
     parser.add_argument('--out_dt', type=str,
                         default='input/dt.cc')
     parser.add_argument('--out_event', type=str,
@@ -24,6 +24,8 @@ out_event = open(args.out_event,'w')
 # assoc params
 ot_dev = cfg.ot_dev
 cc_thres = cfg.cc_thres
+dt_thres = cfg.dt_thres
+max_nbr = cfg.max_nbr
 start_date, end_date = [UTCDateTime(date) for date in args.date_range.split('-')]
 associator = cfg.associator
 
@@ -57,14 +59,16 @@ def mk_det_list():
     num=0
     for line in lines:
         codes = line.split(',')
-        if len(codes[0])>8:
+        if len(codes[0])>16:
             temp_name = codes[0]
+            if temp_name not in temp_dict: to_add = False; continue
             ot = UTCDateTime(codes[1])
             if ot < start_date: to_add = False; continue
             if ot > end_date: break
             to_add = True
-            lat, lon, dep, cc = [float(code) for code in codes[2:6]]
-            det_list.append((temp_name, ot, [lat, lon, dep], cc, {}))
+            cc = float(codes[-1])
+            det_loc = temp_dict[temp_name][1][1:]
+            det_list.append((temp_name, ot, det_loc, cc, {}))
             num+=1
             if num%5000==0: print('processed %s dets'%num)
         else:
@@ -87,8 +91,10 @@ def write_dt(det, evid, fout):
         temp_tp, temp_ts  = temp[-1][net_sta]
         temp_ttp, temp_tts = temp_tp-temp_ot, temp_ts-temp_ot
         det_ttp, det_tts = tp-det_ot, ts-det_ot
-        fout.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, det_ttp-temp_ttp, cc_p**0.5))
-        fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, det_tts-temp_tts, cc_s**0.5))
+        dtp = det_ttp - temp_ttp
+        dts = det_tts - temp_tts
+        if abs(dtp)<dt_thres[0]: fout.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, dtp, cc_p**0.5))
+        if abs(dts)<dt_thres[1]: fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, dts, cc_s**0.5))
 
 
 # write event.dat
@@ -117,6 +123,7 @@ t=time.time()
 temp_dict = mk_temp_dict()
 det_list = mk_det_list()
 det_list = det_list[[temp in temp_dict for temp in det_list['temp']]]
+det_list = det_list[det_list['cc'] > cc_thres]
 
 # assoc det
 num_dets = len(det_list)
@@ -128,23 +135,24 @@ for i in range(num_dets):
 
     # find nbr dets by ot cluster
     cond_ot = abs(det_list['ot'] - det0['ot']) < ot_dev
-    cc = det_list[cond_ot]['cc']
-    cc_max = np.amax(cc)
     reloc_dets = det_list[cond_ot]
+    cc = reloc_dets['cc']
+    cc_max = np.amax(cc)
+    cc_thres = np.sort(cc)[::-1][0:max_nbr][-1]
     deti = reloc_dets[np.argmax(cc)]
+    reloc_dets = reloc_dets[cc > cc_thres]
     det_loc = [deti['ot']] + deti['loc'] + [calc_mag(deti)]
 
     # whether self-det
     temp_id, temp_loc = temp_dict[deti['temp']][0:2]
     if abs(temp_loc[0]-det_loc[0])<ot_dev and cc_max>0.9:
-        reloc_dets = np.delete(reloc_dets, np.argmax(cc), axis=0)
+        reloc_dets = reloc_dets[reloc_dets['cc'] < cc_max]
         det_id = temp_id
 
     # write dt.cc & event.dat
     for reloc_det in reloc_dets:
-      if reloc_det['cc'] > cc_thres:
         write_dt(reloc_det, det_id, out_dt)
-    if cc_max>cc_thres: write_event(det_loc, det_id, out_event)
+    write_event(det_loc, det_id, out_event)
 
     # next det
     det_list = np.delete(det_list, np.where(cond_ot), axis=0)
