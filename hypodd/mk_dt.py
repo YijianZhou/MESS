@@ -25,7 +25,7 @@ out_event = open(args.out_event,'w')
 ot_dev = cfg.ot_dev
 cc_thres = cfg.cc_thres
 dt_thres = cfg.dt_thres
-max_nbr = cfg.max_nbr
+nbr_thres = cfg.nbr_thres
 start_date, end_date = [UTCDateTime(date) for date in args.date_range.split('-')]
 associator = cfg.associator
 
@@ -39,7 +39,7 @@ def mk_temp_dict():
         codes = line.split(',')
         if len(codes)==6:
             temp_name = codes[0]
-            ot = UTCDateTime(codes[1])
+            ot = UTCDateTime(temp_name.split('_')[1])
             lat, lon, dep = [float(code) for code in codes[2:5]]
             temp_loc = [ot, lat, lon, dep]
             temp_dict[temp_name] = [temp_id, temp_loc, {}]
@@ -67,8 +67,7 @@ def mk_det_list():
             if ot > end_date: break
             to_add = True
             cc = float(codes[-1])
-            det_loc = temp_dict[temp_name][1][1:]
-            det_list.append((temp_name, ot, det_loc, cc, {}))
+            det_list.append((temp_name, ot, temp_dict[temp_name][1][1:], cc, {}))
             num+=1
             if num%5000==0: print('processed %s dets'%num)
         else:
@@ -93,8 +92,10 @@ def write_dt(det, evid, fout):
         det_ttp, det_tts = tp-det_ot, ts-det_ot
         dtp = det_ttp - temp_ttp
         dts = det_tts - temp_tts
-        if abs(dtp)<dt_thres[0]: fout.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, dtp, cc_p**0.5))
-        if abs(dts)<dt_thres[1]: fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, dts, cc_s**0.5))
+        if abs(dtp)<dt_thres[0] and cc_p>cc_thres: 
+            fout.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, dtp, cc_p**0.5))
+        if abs(dts)<dt_thres[1] and cc_s>cc_thres: 
+            fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, dts, cc_s**0.5))
 
 
 # write event.dat
@@ -138,21 +139,22 @@ for i in range(num_dets):
     reloc_dets = det_list[cond_ot]
     cc = reloc_dets['cc']
     cc_max = np.amax(cc)
-    cc_thres = np.sort(cc)[::-1][0:max_nbr][-1]
+    cc_min = np.sort(cc)[::-1][0:nbr_thres[1]][-1]
     deti = reloc_dets[np.argmax(cc)]
-    reloc_dets = reloc_dets[cc > cc_thres]
+    reloc_dets = reloc_dets[cc >= cc_min]
     det_loc = [deti['ot']] + deti['loc'] + [calc_mag(deti)]
 
     # whether self-det
     temp_id, temp_loc = temp_dict[deti['temp']][0:2]
-    if abs(temp_loc[0]-det_loc[0])<ot_dev and cc_max>0.9:
+    is_self = abs(temp_loc[0]-det_loc[0])<ot_dev and cc_max>0.8
+    if is_self:
         reloc_dets = reloc_dets[reloc_dets['cc'] < cc_max]
         det_id = temp_id
 
     # write dt.cc & event.dat
-    for reloc_det in reloc_dets:
-        write_dt(reloc_det, det_id, out_dt)
-    write_event(det_loc, det_id, out_event)
+    if len(reloc_dets)>=nbr_thres[0] or is_self:
+        for reloc_det in reloc_dets: write_dt(reloc_det, det_id, out_dt)
+        write_event(det_loc, det_id, out_event)
 
     # next det
     det_list = np.delete(det_list, np.where(cond_ot), axis=0)
