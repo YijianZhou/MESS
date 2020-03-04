@@ -17,8 +17,8 @@ class Config(object):
 
     # MFT params
     self.temp_win_trig = [1., 9.] # win fr trig temp cut, rel p
-    self.temp_win_p = [0.5,1.5]   # win for p temp cut, rel p 
-    self.temp_win_s = [0, 2.]     # win for s temp cut, rel s
+    self.temp_win_p = [0.5, 1.5]   # win for p temp cut, rel p 
+    self.temp_win_s = [0.5, 1.5]     # win for s temp cut, rel s
     self.trig_thres = 0.25        # cc thres for det & mask
     self.mask_len = 1.            # win len for cc mask
     self.det_gap = 5.             # gap sec for detection
