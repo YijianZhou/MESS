@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from scipy.signal import correlate
 import numpy as np
 from numba import jit
+import matplotlib.pyplot as plt
 from dataset_gpu import cpu2cuda
 import config
 
@@ -47,6 +48,7 @@ def msms_det(temp_pick_dict, data_dict):
     cc_masked = [mask_cc(cci) for cci in cc]
     # 4. stack & detect
     cc_stack = np.mean(cc_masked, axis=0)
+#    plt.plot(cc_stack); plt.show()
     dets = det_cc_stack(cc_stack)
     print('{} dets, {} sta, {:.1f}s'.format(len(dets), num_sta, time.time()-t))
     return dets
@@ -77,19 +79,19 @@ def corr_ppk(det_ot, temp_pick_dict, data_dict):
         data_s = data_np[:, ts0 - s_rng[0] : ts0 + s_rng[1]]
 
         # 1. ppk by cc
-        cc_p  = calc_cc(data_p[2], temp[1][2], norm_temp=norm_temp[1][2])
-        cc_s0 = calc_cc(data_s[0], temp[2][0], norm_temp=norm_temp[2][0])
-        cc_s1 = calc_cc(data_s[1], temp[2][1], norm_temp=norm_temp[2][1])
+        cc_p = calc_cc(data_p[2], temp[1][2], norm_temp=norm_temp[1][2])
+        cc_s = [calc_cc(data_s[i], temp[2][i], norm_temp=norm_temp[2][i]) for i in range(3)]
+        cc_s = np.mean(cc_s, axis=0)
         # tp & ts (rel sec)
         tp = (tp0 + np.argmax(cc_p) - ppk_win_p[0]) / samp_rate
-        ts = (ts0 + (np.argmax(cc_s0) + np.argmax(cc_s1))/2. - ppk_win_s[0]) / samp_rate
+        ts = (ts0 + np.argmax(cc_s) - ppk_win_s[0]) / samp_rate
         # cc_p & cc_s
         cc_p_max = np.amax(cc_p)
-        cc_s_max = (np.amax(cc_s0) + np.amax(cc_s1)) / 2.
+        cc_s_max = np.amax(cc_s)
 
         # 2. get amplitude
-        amp_xyz = np.array([picker.get_amp(tr) for tr in data_s])
-        s_amp = np.linalg.norm(amp_xyz)
+        amp = np.array([picker.get_amp(tr) for tr in data_s])
+        s_amp = np.linalg.norm(amp)
         picks.append([net_sta, tp, ts, s_amp, cc_p_max, cc_s_max])
     return picks
 
