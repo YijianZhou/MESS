@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from scipy.signal import correlate
 import numpy as np
 from numba import jit
-import matplotlib.pyplot as plt
 from dataset_gpu import cpu2cuda
 import config
 
@@ -48,7 +47,6 @@ def msms_det(temp_pick_dict, data_dict):
     cc_masked = [mask_cc(cci) for cci in cc]
     # 4. stack & detect
     cc_stack = np.mean(cc_masked, axis=0)
-#    plt.plot(cc_stack); plt.show()
     dets = det_cc_stack(cc_stack)
     print('{} dets, {} sta, {:.1f}s'.format(len(dets), num_sta, time.time()-t))
     return dets
