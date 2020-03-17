@@ -9,6 +9,7 @@ import config
 
 # MSMS params
 cfg = config.Config()
+min_sta = cfg.min_sta
 freq_band = cfg.freq_band
 samp_rate = cfg.samp_rate
 temp_win_p = [int(samp_rate * win) for win in cfg.temp_win_p]
@@ -31,14 +32,16 @@ def msms_det(temp_pick_dict, data_dict):
     """
     t=time.time()
     # prep input
-    num_sta = len(temp_pick_dict)
-    cc_holder = np.zeros([num_sta, int(86400*samp_rate)])
     data_list, temp_list, dt_ot_list = [], [], []
     for net_sta, [temp, norm_temp, dt_list] in temp_pick_dict.items():
+        if net_sta not in data_dict: continue
         data, norm_data = data_dict[net_sta][1:3]
         data_list.append([data, norm_data])
         temp_list.append([temp[0], norm_temp[0]])
         dt_ot_list.append(dt_list[0])
+    num_sta = len(data_list)
+    if num_sta<min_sta: return []
+    cc_holder = np.zeros([num_sta, int(86400*samp_rate)])
     # 1. match
     cc_mat = match_filter(data_list, temp_list)
     # 2. shift
@@ -64,6 +67,7 @@ def corr_ppk(det_ot, temp_pick_dict, data_dict):
     picks = []
     for net_sta, [temp, norm_temp, dt_list] in temp_pick_dict.items():
         # get np data & temp
+        if net_sta not in data_dict: continue
         data_np = data_dict[net_sta][0].numpy()
         temp = [tempi.numpy() for tempi in temp]
         norm_temp = [normi.numpy() for normi in norm_temp]

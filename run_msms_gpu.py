@@ -44,7 +44,7 @@ if __name__ == '__main__':
   # get date range
   start_date, end_date = [UTCDateTime(date) for date in args.date_range.split('-')]
   print('run MSMS (gpu version)')
-  print('date range: {} to {}'.format(start_date, end_date))
+  print('date range: {} to {}'.format(start_date.date, end_date.date))
 
   # for all days
   num_day = (end_date.date - start_date.date).days
@@ -59,15 +59,9 @@ if __name__ == '__main__':
 
     # for all templates
     for [temp_name, temp_loc, temp_pick_dict] in temp_list:
-        # get pick 
-        print('template {}'.format(temp_name))
-        todel = [net_sta for net_sta in temp_pick_dict if net_sta not in data_dict]
-        for net_sta in todel: temp_pick_dict.pop(net_sta)
-        if len(temp_pick_dict)<min_sta: continue
-
         # msms det
+        print('template {}'.format(temp_name))
         dets = msms_det(temp_pick_dict, data_dict)
-        if len(dets)==0: continue
         # corr ppk
         for [det_ot, det_cc] in dets:
             picks = corr_ppk(det_ot, temp_pick_dict, data_dict)
