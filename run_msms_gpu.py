@@ -13,11 +13,12 @@ warnings.filterwarnings("ignore")
 import torch.multiprocessing as mp
 import torch
 mp.set_sharing_strategy('file_system')
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 if __name__ == '__main__':
   mp.set_start_method('spawn', force=True) # or 'forkserver'
   parser = argparse.ArgumentParser()
+  parser.add_argument('--gpu_idx', type=str,
+                      default="0")
   parser.add_argument('--data_dir', type=str,
                       default='/data/*')
   parser.add_argument('--date_range', type=str,
@@ -34,6 +35,7 @@ if __name__ == '__main__':
 
 
   # MSMS params
+  os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_idx
   cfg = config.Config()
   min_sta = cfg.min_sta
   # i/o paths
