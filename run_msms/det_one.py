@@ -2,6 +2,7 @@ import os, shutil
 from obspy import UTCDateTime
 
 # i/o paths
+gpu_idx = "0"
 msms_dir = '/home/zhouyj/software/MSMS'
 data_dir = '/data2/ZSY_SAC/*/*'
 date_rng = '20160901-20190201'
@@ -20,9 +21,9 @@ for i in range(num_files):
     date_rng = '{}-{}'.format(t0, t1)
     out_pha = '{}/phase_{}.dat'.format(out_root, date_rng)
     out_ctlg = '{}/catalog_{}.dat'.format(out_root, date_rng)
-    os.system("python {}/run_msms_gpu.py \
+    os.system("python {}/run_msms_gpu.py --gpu_idx={} \
         --data_dir={} --date_range={} \
         --temp_root={} --temp_pha={} \
         --out_ctlg={} --out_pha={}"\
-        .format(msms_dir, data_dir, date_rng, temp_root, temp_pha, out_ctlg, out_pha))
+        .format(msms_dir, gpu_idx, data_dir, date_rng, temp_root, temp_pha, out_ctlg, out_pha))
 
