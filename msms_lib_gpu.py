@@ -87,8 +87,8 @@ def corr_ppk(det_ot, temp_pick_dict, data_dict):
         cc_s = [calc_cc(data_s[i], temp[2][i], norm_temp=norm_temp[2][i]) for i in range(3)]
         cc_s = np.mean(cc_s, axis=0)
         # tp & ts (rel sec)
-        tp_idx = (tp0 + np.argmax(cc_p) - ppk_win_p[0])
-        ts_idx = (ts0 + np.argmax(cc_s) - ppk_win_s[0])
+        tp_idx = tp0 + np.argmax(cc_p) - ppk_win_p[0]
+        ts_idx = ts0 + np.argmax(cc_s) - ppk_win_s[0]
         tp = tp_idx / samp_rate
         ts = ts_idx / samp_rate
         # cc_p & cc_s
