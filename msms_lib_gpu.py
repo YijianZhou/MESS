@@ -96,9 +96,7 @@ def corr_ppk(det_ot, temp_pick_dict, data_dict):
         cc_s_max = np.amax(cc_s)
 
         # 2. get amplitude
-        data_amp = data_np[:, ts_idx-amp_win[0] : ts_idx+amp_win[1]]
-        amp = np.array([picker.get_amp(tr) for tr in data_amp])
-        s_amp = np.linalg.norm(amp)
+        s_amp = picker.get_amp(data_np[:, ts_idx-amp_win[0] : ts_idx+amp_win[1]])
         picks.append([net_sta, tp, ts, s_amp, cc_p_max, cc_s_max])
     return picks
 
