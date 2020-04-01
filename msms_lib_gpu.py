@@ -16,6 +16,7 @@ temp_win_p = [int(samp_rate * win) for win in cfg.temp_win_p]
 temp_win_s = [int(samp_rate * win) for win in cfg.temp_win_s]
 ppk_win_p = [int(samp_rate * win) for win in cfg.ppk_win_p]
 ppk_win_s = [int(samp_rate * win) for win in cfg.ppk_win_s]
+amp_win = [int(samp_rate * win) for win in cfg.amp_win]
 mask_len = int(samp_rate * cfg.mask_len)
 det_gap = int(samp_rate * cfg.det_gap)
 trig_thres = cfg.trig_thres
@@ -39,6 +40,7 @@ def msms_det(temp_pick_dict, data_dict):
         data_list.append([data, norm_data])
         temp_list.append([temp[0], norm_temp[0]])
         dt_ot_list.append(dt_list[0])
+
     num_sta = len(data_list)
     if num_sta<min_sta: return []
     cc_holder = np.zeros([num_sta, int(86400*samp_rate)])
@@ -85,14 +87,17 @@ def corr_ppk(det_ot, temp_pick_dict, data_dict):
         cc_s = [calc_cc(data_s[i], temp[2][i], norm_temp=norm_temp[2][i]) for i in range(3)]
         cc_s = np.mean(cc_s, axis=0)
         # tp & ts (rel sec)
-        tp = (tp0 + np.argmax(cc_p) - ppk_win_p[0]) / samp_rate
-        ts = (ts0 + np.argmax(cc_s) - ppk_win_s[0]) / samp_rate
+        tp_idx = (tp0 + np.argmax(cc_p) - ppk_win_p[0])
+        ts_idx = (ts0 + np.argmax(cc_s) - ppk_win_s[0])
+        tp = tp_idx / samp_rate
+        ts = ts_idx / samp_rate
         # cc_p & cc_s
         cc_p_max = np.amax(cc_p)
         cc_s_max = np.amax(cc_s)
 
         # 2. get amplitude
-        amp = np.array([picker.get_amp(tr) for tr in data_s])
+        data_amp = data_np[:, ts_idx-amp_win[0] : ts_idx+amp_win[1]]
+        amp = np.array([picker.get_amp(tr) for tr in data_amp])
         s_amp = np.linalg.norm(amp)
         picks.append([net_sta, tp, ts, s_amp, cc_p_max, cc_s_max])
     return picks
