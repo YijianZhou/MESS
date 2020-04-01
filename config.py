@@ -24,6 +24,7 @@ class Config(object):
     self.det_gap = 5.             # gap sec for detection
     self.ppk_win_p = [1., 1.]     # win for p pick
     self.ppk_win_s = [2., 2.]     # win for s pick
+    self.amp_win = [0, 6]         # win for amplitude measurement
 
     # data process
     self.resp_dict = {'ZSY': 3.02e8,
