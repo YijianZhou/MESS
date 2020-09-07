@@ -1,5 +1,5 @@
 # MESS
-Catalog augmentation (event detection) based on matched filter technique 
+Catalog augmentation (event detection) based on matched filter technique (MFT)
 <br>
 Usage: <br>
 (1) Cut out template waveform <br>
