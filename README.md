@@ -1,4 +1,4 @@
-# MSMS
+# MESS
 Catalog augmentation (event detection) based on matched filter technique 
 <br>
 Usage: <br>
