@@ -1,101 +1,108 @@
+""" Associate MESS detections
+"""
+import os, glob
 from obspy import UTCDateTime
 import numpy as np
-import time
-import argparse
+import multiprocessing as mp
 import config
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--date_range', type=str,
-                        default='20190704-20190705')
-    parser.add_argument('--out_dt', type=str,
-                        default='input/dt.cc')
-    parser.add_argument('--out_event', type=str,
-                        default='input/event.dat')
-    parser.add_argument('--start_id', type=int, default=100000)
-    args = parser.parse_args()
+import warnings
+warnings.filterwarnings("ignore")
 
 
-# i/o paths
-cfg = config.Config()
-dep_corr = cfg.dep_corr
-out_dt = open(args.out_dt,'w')
-out_event = open(args.out_event,'w')
-# assoc params
-ot_dev = cfg.ot_dev
-cc_thres = cfg.cc_thres
-dt_thres = cfg.dt_thres
-nbr_thres = cfg.nbr_thres
-start_date, end_date = [UTCDateTime(date) for date in args.date_range.split('-')]
-associator = cfg.associator
+# assoc det
+def assoc_one_day(start_date, start_evid):
+    print('associating %s'%start_date)
+    print('reading detection phase file')
+    det_list = read_det_pha(det_pha, start_date, start_date+86400)
+    det_list = det_list[[temp_id in temp_loc_dict for temp_id in det_list['temp_id']]]
+    out_dt = open('input/dt_%s.cc'%start_date.date,'w')
+    out_event = open('input/event_%s.dat'%start_date.date,'w')
+    dets = det_list[(det_list['ot']>start_date)*(det_list['ot']<start_date+86400)]
+    dets = dets[dets['cc']>cc_thres]
+    num_dets = len(dets)
+    for i in range(num_dets):
+        if i%500==0: print('{} events associated | left {}'.format(i, len(dets)))
+        det_id = start_evid + i
+        det_0 = dets[0]
+        # find neighbor dets by ot cluster
+        cond_ot = abs(dets['ot']-det_0['ot']) < ot_dev
+        dets_reloc = dets[cond_ot]
+        cc = dets_reloc['cc']
+        # whether self-det
+        is_self = False
+        for j,det in enumerate(dets_reloc):
+            temp_loc = temp_loc_dict[det['temp_id']]
+            if abs(temp_loc[0]-det['ot'])<ot_dev: 
+                det_i = det
+                det_id = det['temp_id']
+                is_self = True
+                dets_reloc = np.delete(dets_reloc, j, axis=0)
+                cc = np.delete(cc, j, axis=0)
+                break
+        # sort by cc & restrict number of neighbor
+        if not is_self: det_i = dets_reloc[np.argmax(cc)]
+        if len(cc)>0:
+            cc_min = np.sort(cc)[::-1][0:nbr_thres[1]][-1]
+            cc_max = np.amax(cc)
+            dets_reloc = dets_reloc[cc>=cc_min]
+            cc = cc[cc>=cc_min]
+        # replace temp_loc with reloc
+        if not is_self: temp_loc = temp_loc_dict[det_i['temp_id']]
+        det_loc = [det_i['ot']] + temp_loc[1:] + [calc_mag(det_i)]
+        # write dt.cc & event.dat
+        if len(dets_reloc)>=nbr_thres[0] or is_self:
+            for det in dets_reloc: write_dt(det, det_id, det['ot']-det_loc[0], out_dt)
+            write_event(det_loc, det_id, out_event)
+        # next det
+        dets = np.delete(dets, np.where(cond_ot), axis=0)
+        if len(dets)==0: break
+    out_dt.close()
+    out_event.close()
 
 
-# read temp pha
-def mk_temp_dict():
-    f=open(cfg.temp_pha); lines=f.readlines(); f.close()
-    temp_dict = {}
-    temp_id = 0
+# read temp pha --> temp_loc_dict
+def read_temp_pha(temp_pha):
+    f=open(temp_pha); lines=f.readlines(); f.close()
+    temp_loc_dict = {}
     for line in lines:
         codes = line.split(',')
-        if len(codes)==6:
-            temp_name = codes[0]
-            ot = UTCDateTime(temp_name.split('_')[1])
-            lat, lon, dep = [float(code) for code in codes[2:5]]
-            temp_loc = [ot, lat, lon, dep]
-            temp_dict[temp_name] = [temp_id, temp_loc, {}]
-            temp_id += 1
-        else:
-            net_sta = '.'.join(codes[0:2])
-            tp, ts = [UTCDateTime(code) for code in codes[2:4]]
-            temp_dict[temp_name][-1][net_sta] = [tp, ts]
-    return temp_dict
+        if len(codes[0])<14: continue
+        ot = UTCDateTime(codes[0])
+        lat, lon, dep = [float(code) for code in codes[1:4]]
+        temp_id = codes[-1][:-1]
+        temp_loc_dict[temp_id] = [ot, lat, lon, dep]
+    return temp_loc_dict
 
 
-# read det pha
-def mk_det_list():
-    f=open(cfg.det_pha); lines=f.readlines(); f.close()
-    dtype = [('temp','O'),('ot','O'),('loc','O'),('cc','O'),('picks','O')]
+# read det pha (MESS output) --> det_list
+def read_det_pha(det_pha, start_time, end_time):
+    f=open(det_pha); lines=f.readlines(); f.close()
+    dtype = [('temp_id','O'),('ot','O'),('loc','O'),('cc','O'),('picks','O')]
     det_list = []
-    num=0
     for line in lines:
         codes = line.split(',')
-        if len(codes[0])>16:
-            temp_name = codes[0]
-            if temp_name not in temp_dict: to_add = False; continue
+        if len(codes[0])>=14:
+            temp_id = codes[0].split('_')[0]
             ot = UTCDateTime(codes[1])
-            if ot < start_date: to_add = False; continue
-            if ot > end_date: break
-            to_add = True
-            cc = float(codes[-1])
-            det_list.append((temp_name, ot, temp_dict[temp_name][1][1:], cc, {}))
-            num+=1
-            if num%5000==0: print('processed %s dets'%num)
+            lat, lon, dep, cc_det = [float(code) for code in codes[2:6]]
+            to_add = True if start_time<ot<end_time else False
+            if to_add: det_list.append((temp_id, ot, [lat, lon, dep], cc_det, {}))
         else:
             if not to_add: continue
             net_sta = codes[0]
-            tp, ts = [UTCDateTime(code) for code in codes[1:3]]
-            s_amp, cc_p, cc_s = [float(code) for code in codes[3:6]]
-            det_list[-1][-1][net_sta] = [tp, ts, s_amp, cc_p, cc_s]
+            dt_p, dt_s, s_amp, cc_p, cc_s = [float(code) for code in codes[3:8]]
+            det_list[-1][-1][net_sta] = [dt_p, dt_s, s_amp, cc_p, cc_s]
     return np.array(det_list, dtype=dtype)
 
 
 # write dt.cc
-def write_dt(det, evid, fout):
-    det_ot = det['ot']
-    temp = temp_dict[det['temp']]
-    temp_id, temp_ot = temp[0], temp[1][0]
+def write_dt(det, evid, ot_corr, fout):
+    temp_id = det['temp_id']
     fout.write('# {:9} {:9} 0.0\n'.format(evid, temp_id))
-    for net_sta, [tp, ts, _, cc_p, cc_s] in det['picks'].items():
+    for net_sta, [dt_p, dt_s, _, cc_p, cc_s] in det['picks'].items():
         sta = net_sta.split('.')[1]
-        temp_tp, temp_ts  = temp[-1][net_sta]
-        temp_ttp, temp_tts = temp_tp-temp_ot, temp_ts-temp_ot
-        det_ttp, det_tts = tp-det_ot, ts-det_ot
-        dtp = det_ttp - temp_ttp
-        dts = det_tts - temp_tts
-        if abs(dtp)<dt_thres[0] and cc_p>cc_thres: 
-            fout.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, dtp, cc_p**0.5))
-        if abs(dts)<dt_thres[1] and cc_s>cc_thres: 
-            fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, dts, cc_s**0.5))
+        if abs(dt_p)<=dt_thres[0] and cc_p>=cc_thres: fout.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, dt_p+ot_corr, cc_p**0.5))
+        if abs(dt_s)<=dt_thres[1] and cc_s>=cc_thres: fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, dt_s+ot_corr, cc_s**0.5))
 
 
 # write event.dat
@@ -112,53 +119,45 @@ def write_event(event_loc, evid, fout):
 # calc mag with PAD assoc
 def calc_mag(event):
     event_loc = {'evt_lat':event['loc'][0], 'evt_lon':event['loc'][1]}
-    event_pick = [{'net_sta':net_sta, 's_amp':s_amp} \
-        for net_sta, [_,_,s_amp,_,_] in event['picks'].items()]
-    event_loc = associator.calc_mag(event_pick, event_loc)
+    event_pick = np.array([(net_sta, s_amp) \
+        for net_sta, [_,_,s_amp,_,_] in event['picks'].items()],
+        dtype=[('net_sta','O'),('s_amp','O')])
+    event_loc = pad_calc_mag(event_pick, event_loc)
     return event_loc['mag']
 
 
-# prep input
-print('prep input')
-t=time.time()
-temp_dict = mk_temp_dict()
-det_list = mk_det_list()
-det_list = det_list[[temp in temp_dict for temp in det_list['temp']]]
-det_list = det_list[det_list['cc'] > cc_thres]
-
-# assoc det
-num_dets = len(det_list)
-for i in range(num_dets):
-    det_id = args.start_id + i
-    if i%100==0: print('process {}th det | {:.0f} remains | {:.1f}s'\
-        .format(i, num_dets, time.time()-t))
-    det0 = det_list[0]
-
-    # find nbr dets by ot cluster
-    cond_ot = abs(det_list['ot'] - det0['ot']) < ot_dev
-    reloc_dets = det_list[cond_ot]
-    cc = reloc_dets['cc']
-    cc_max = np.amax(cc)
-    cc_min = np.sort(cc)[::-1][0:nbr_thres[1]][-1]
-    deti = reloc_dets[np.argmax(cc)]
-    reloc_dets = reloc_dets[cc >= cc_min]
-    det_loc = [deti['ot']] + deti['loc'] + [calc_mag(deti)]
-
-    # whether self-det
-    temp_id, temp_loc = temp_dict[deti['temp']][0:2]
-    is_self = abs(temp_loc[0]-det_loc[0])<ot_dev and cc_max>0.8
-    if is_self:
-        reloc_dets = reloc_dets[reloc_dets['cc'] < cc_max]
-        det_id = temp_id
-
-    # write dt.cc & event.dat
-    if len(reloc_dets)>=nbr_thres[0] or is_self:
-        for reloc_det in reloc_dets: write_dt(reloc_det, det_id, out_dt)
-        write_event(det_loc, det_id, out_event)
-
-    # next det
-    det_list = np.delete(det_list, np.where(cond_ot), axis=0)
-    if len(det_list)==0: break
-
-out_dt.close()
-out_event.close()
+if __name__ == '__main__':
+  # i/o paths
+  cfg = config.Config()
+  dep_corr = cfg.dep_corr
+  temp_pha = cfg.temp_pha
+  det_pha = cfg.det_pha
+  for fname in glob.glob('input/dt_*.cc'): os.unlink(fname)
+  for fname in glob.glob('input/event_*.dat'): os.unlink(fname)
+  # assoc params
+  ot_dev = cfg.ot_dev
+  cc_thres = cfg.cc_thres
+  dt_thres = cfg.dt_thres
+  nbr_thres = cfg.nbr_thres
+  evid_stride = cfg.evid_stride
+  num_workers = cfg.num_workers
+  time_range = cfg.time_range
+  start_date, end_date = [UTCDateTime(date) for date in cfg.time_range.split('-')]
+  num_days = (end_date.date - start_date.date).days
+  pad_calc_mag = cfg.calc_mag
+  # read phase file
+  print('reading template phase file')
+  temp_loc_dict = read_temp_pha(temp_pha)
+  # start assoc
+#  for day_idx in range(num_days): assoc_one_day(start_date+86400*day_idx, evid_stride*(1+day_idx))
+  pool = mp.Pool(num_workers)
+  for day_idx in range(num_days):
+    pool.apply_async(assoc_one_day, args=(start_date+86400*day_idx, evid_stride*(1+day_idx),))
+  pool.close()
+  pool.join()
+  # merge files
+  os.system('cat input/dt_*.cc > input/dt.cc')
+  os.system('cat input/event_*.dat > input/event.dat')
+  for fname in glob.glob('input/dt_*.cc'): os.unlink(fname)
+  for fname in glob.glob('input/event_*.dat'): os.unlink(fname)
+  

@@ -1,3 +1,5 @@
+""" Basic modules of MESS
+"""
 import os, time
 import torch
 import torch.nn.functional as F
@@ -7,32 +9,35 @@ from numba import jit
 from dataset_gpu import cpu2cuda
 import config
 
-# MSMS params
+# MESS params
 cfg = config.Config()
 min_sta = cfg.min_sta
 freq_band = cfg.freq_band
 samp_rate = cfg.samp_rate
 temp_win_p = [int(samp_rate * win) for win in cfg.temp_win_p]
 temp_win_s = [int(samp_rate * win) for win in cfg.temp_win_s]
-ppk_win_p = [int(samp_rate * win) for win in cfg.ppk_win_p]
-ppk_win_s = [int(samp_rate * win) for win in cfg.ppk_win_s]
+pick_win_p = [int(samp_rate * win) for win in cfg.pick_win_p]
+pick_win_s = [int(samp_rate * win) for win in cfg.pick_win_s]
 amp_win = [int(samp_rate * win) for win in cfg.amp_win]
-mask_len = int(samp_rate * cfg.mask_len)
+expand_len = int(samp_rate * cfg.expand_len)
 det_gap = int(samp_rate * cfg.det_gap)
+chn_p = cfg.chn_p
+chn_s = cfg.chn_s
 trig_thres = cfg.trig_thres
-picker = cfg.picker
+get_amp = cfg.get_amp
 
 
-def msms_det(temp_pick_dict, data_dict):
-    """ MSMS detection (main)
-    Inputs
+def mess_det(temp_pick_dict, data_dict):
+    """ MESS detection (main)
+    Input
       temp, norm_temp, dt_list = temp_pick_dict[net_sta]
       data, norm_data = data_dict[net_sta]
-    Outputs
+    Output
       dets = [det_ot, det_cc]
+      *note: det_ot is in relative sec
     """
     t=time.time()
-    # prep input
+    # get batch input
     data_list, temp_list, dt_ot_list = [], [], []
     for net_sta, [temp, norm_temp, dt_list] in temp_pick_dict.items():
         if net_sta not in data_dict: continue
@@ -40,64 +45,61 @@ def msms_det(temp_pick_dict, data_dict):
         data_list.append([data, norm_data])
         temp_list.append([temp[0], norm_temp[0]])
         dt_ot_list.append(dt_list[0])
-
     num_sta = len(data_list)
     if num_sta<min_sta: return []
     cc_holder = np.zeros([num_sta, int(86400*samp_rate)])
     # 1. match
     cc_mat = match_filter(data_list, temp_list)
-    # 2. shift
-    cc = shift_ot(cc_holder, cc_mat, dt_ot_list)
-    # 3. mask
-    cc_masked = [mask_cc(cci) for cci in cc]
+    # 2. expand
+    cc_expand = [expand_cc(cc_i) for cc_i in cc_mat]
+    # 3. shift
+    cc_shift = shift_ot(cc_expand, dt_ot_list, cc_holder)
     # 4. stack & detect
-    cc_stack = np.mean(cc_masked, axis=0)
+    cc_stack = np.mean(cc_shift, axis=0)
     dets = det_cc_stack(cc_stack)
-    print('{} dets, {} sta, {:.1f}s'.format(len(dets), num_sta, time.time()-t))
+    print('{} detections, {} stations, {:.1f}s'.format(len(dets), num_sta, time.time()-t))
     return dets
 
 
-def corr_ppk(det_ot, temp_pick_dict, data_dict):
+def cc_pick(det_ot, temp_pick_dict, data_dict):
     """ Cross-correlation phase picking (main)
-    Inputs
-      det_ot (sec): detected orgin time (relative)
-      temp_pick_dict, data_dict
-    Outputs
-      picks (list): [net_sta, tp, ts, s_amp, cc_p, cc_s]
+    Input
+      det_ot: detected orgin time (relative sec to date)
+      temp_pick_dict
+      data_dict
+    Output
+      picks: [net_sta, tp, ts, dt_p, dt_s, s_amp, cc_p, cc_s]
     """
-    det_ot *= samp_rate # sec to idx
+    det_ot = int(det_ot * samp_rate) # sec to idx
     picks = []
     for net_sta, [temp, norm_temp, dt_list] in temp_pick_dict.items():
         # get np data & temp
         if net_sta not in data_dict: continue
         data_np = data_dict[net_sta][0].numpy()
-        temp = [tempi.numpy() for tempi in temp]
-        norm_temp = [normi.numpy() for normi in norm_temp]
+        temp = [di.numpy() for di in temp]
+        norm_temp = [di.numpy() for di in norm_temp]
         # slice p&s data
-        p_rng = [temp_win_p[0] + ppk_win_p[0], temp_win_p[1] + ppk_win_p[1]]
-        s_rng = [temp_win_s[0] + ppk_win_s[0], temp_win_s[1] + ppk_win_s[1]]
+        p_range = [temp_win_p[0] + pick_win_p[0], temp_win_p[1] + pick_win_p[1]]
+        s_range = [temp_win_s[0] + pick_win_s[0], temp_win_s[1] + pick_win_s[1]]
         tp0, ts0 = int(det_ot + dt_list[1]), int(det_ot + dt_list[2])
-        if tp0 < p_rng[0] or ts0 < s_rng[0] \
-        or ts0 + s_rng[1] > data_np.shape[-1]: continue
-        data_p = data_np[:, tp0 - p_rng[0] : tp0 + p_rng[1]]
-        data_s = data_np[:, ts0 - s_rng[0] : ts0 + s_rng[1]]
-
-        # 1. ppk by cc
-        cc_p = calc_cc(data_p[2], temp[1][2], norm_temp=norm_temp[1][2])
-        cc_s = [calc_cc(data_s[i], temp[2][i], norm_temp=norm_temp[2][i]) for i in range(3)]
+        if tp0 < p_range[0] or ts0 < s_range[0] \
+        or ts0 + s_range[1] > data_np.shape[-1]: continue
+        data_p = data_np[:, tp0 - p_range[0] : tp0 + p_range[1]]
+        data_s = data_np[:, ts0 - s_range[0] : ts0 + s_range[1]]
+        # 1. pick by cc
+        cc_p = [calc_cc(data_p[i], temp[1][i], norm_temp=norm_temp[1][i]) for i in chn_p]
+        cc_s = [calc_cc(data_s[i], temp[2][i], norm_temp=norm_temp[2][i]) for i in chn_s]
+        cc_p = np.mean(cc_p, axis=0)
         cc_s = np.mean(cc_s, axis=0)
-        # tp & ts (rel sec)
-        tp_idx = tp0 + np.argmax(cc_p) - ppk_win_p[0]
-        ts_idx = ts0 + np.argmax(cc_s) - ppk_win_s[0]
-        tp = tp_idx / samp_rate
-        ts = ts_idx / samp_rate
-        # cc_p & cc_s
-        cc_p_max = np.amax(cc_p)
-        cc_s_max = np.amax(cc_s)
-
+        # [tp, ts], [dt_p, dt_s] (relative sec), & [cc_p, cc_s]
+        tp_idx = tp0 + np.argmax(cc_p) - pick_win_p[0]
+        ts_idx = ts0 + np.argmax(cc_s) - pick_win_s[0]
+        tp, ts = tp_idx/samp_rate, ts_idx/samp_rate
+        dt_p, dt_s = (tp_idx-tp0)/samp_rate, (ts_idx-ts0)/samp_rate
+        cc_p_max, cc_s_max = np.amax(cc_p), np.amax(cc_s)
         # 2. get amplitude
-        s_amp = picker.get_amp(data_np[:, ts_idx-amp_win[0] : ts_idx+amp_win[1]])
-        picks.append([net_sta, tp, ts, s_amp, cc_p_max, cc_s_max])
+        s_amp = get_amp(data_np[:, tp_idx-amp_win[0] : ts_idx+amp_win[1]], samp_rate)
+        picks.append([net_sta, tp, ts, dt_p, dt_s, s_amp, cc_p_max, cc_s_max])
     return picks
 
 
@@ -133,10 +135,10 @@ def calc_cc(data, temp, norm_data=None, norm_temp=None):
 # 1. matched filter (calc cc traces)
 def match_filter(data_list, temp_list):
     for i in range(3):
-        data_mat = torch.stack([datai[i] for [datai,_] in data_list])
-        norm_data = torch.stack([normi[i] for [_,normi] in data_list])
-        temp_mat = cpu2cuda(torch.stack([tempi[i] for [tempi,_] in temp_list]))
-        norm_temp = cpu2cuda(torch.tensor([normi[i] for [_,normi] in temp_list]))
+        data_mat = torch.stack([data[i] for [data,_] in data_list])
+        norm_data = torch.stack([norm[i] for [_,norm] in data_list])
+        temp_mat = cpu2cuda(torch.stack([temp[i] for [temp,_] in temp_list]))
+        norm_temp = cpu2cuda(torch.tensor([norm[i] for [_,norm] in temp_list]))
         if i==0: cc_mat  = calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
         else:    cc_mat += calc_cc_gpu(data_mat, temp_mat, norm_data, norm_temp)
     cc_mat = (cc_mat/3.).cpu().numpy()
@@ -145,32 +147,31 @@ def match_filter(data_list, temp_list):
     return cc_mat
 
 
-# 2. shift time shift to ot
+# 2. expand peak value in CC trace
 @jit
-def shift_ot(cc_holder, cc_mat, dt_ot_list):
-    for i,dt_ot in enumerate(dt_ot_list):
-        cci = cc_mat[i][max(0,-dt_ot) : cc_holder.shape[1] - dt_ot]
-        cc_holder[i][max(0,dt_ot) : max(0,dt_ot) + len(cci)] = cci
-    return cc_holder
-
-
-# 3. mask cc trace with peak values
-@jit
-def mask_cc(cc):
+def expand_cc(cc):
     trig_idxs = np.where(cc>trig_thres)[0]
     slide_idx = 0
     for trig_idx in trig_idxs:
         if trig_idx < slide_idx: continue
-        # mask cc with peak ccs
-        cc_trig = cc[trig_idx : trig_idx+2*mask_len]
+        cc_trig = cc[trig_idx : trig_idx+2*expand_len]
         cc_max = np.amax(cc_trig)
         idx_max = trig_idx + np.argmax(cc_trig)
-        idx0 = max(0, idx_max - mask_len//2)
-        idx1 = idx_max + mask_len//2
-        cc[idx0:idx1] = cc_max
+        idx_0 = max(0, idx_max - expand_len//2)
+        idx_1 = idx_max + expand_len//2
+        cc[idx_0:idx_1] = cc_max
         # next trig
-        slide_idx = trig_idx + 2*mask_len + det_gap
+        slide_idx = trig_idx + 2*expand_len + det_gap
     return cc
+
+
+# 3. shift time shift to ot
+@jit
+def shift_ot(cc_list, dt_ot_list, cc_holder):
+    for i,dt_ot in enumerate(dt_ot_list):
+        cc_i = cc_list[i][max(0,-dt_ot) : cc_holder.shape[1] - dt_ot]
+        cc_holder[i][max(0,dt_ot) : max(0,dt_ot) + len(cc_i)] = cc_i
+    return cc_holder
 
 
 # 4. detect on stacked cc trace
@@ -182,24 +183,24 @@ def det_cc_stack(cc_stack):
     for det_idx in det_idxs:
         if det_idx < slide_idx: continue
         # det ot (rel sec)
-        cc_det = cc_stack[det_idx : det_idx+2*mask_len]
+        cc_det = cc_stack[det_idx : det_idx+2*expand_len]
         cc_max = np.amax(cc_det)
         det_ot = (det_idx + np.median(np.where(cc_det == cc_max)[0])) / samp_rate
         dets.append([det_ot, cc_max]) 
         # next det
-        slide_idx = det_idx + 2*mask_len + det_gap
+        slide_idx = det_idx + 2*expand_len + det_gap
     return dets
 
 
 # write detection to catalog
 def write_ctlg(det_ot, det_cc, temp_name, temp_loc, out_ctlg):
-    out_ctlg.write('{0},{1},{2[1]},{2[2]},{2[3]},{3:.3f}\n'\
-        .format(temp_name, det_ot, temp_loc, det_cc))
+    out_ctlg.write('{0},{1},{2[1]},{2[2]},{2[3]},{3:.3f}\n'.format(temp_name, det_ot, temp_loc, det_cc))
+
 
 # write phase picks to phase file
 def write_pha(det_ot, det_cc, temp_name, temp_loc, picks, out_pha):
-    out_pha.write('{0},{1},{2[1]},{2[2]},{2[3]},{3:.3f}\n'\
-        .format(temp_name, det_ot, temp_loc, det_cc))
+    out_pha.write('{0},{1},{2[1]},{2[2]},{2[3]},{3:.3f}\n'.format(temp_name, det_ot, temp_loc, det_cc))
     for pick in picks:
-        out_pha.write('{0[0]},{0[1]},{0[2]},{0[3]},{0[4]:.3f},{0[5]:.3f}\n'.format(pick))
+        # net_sta, tp, ts, dt_p, dt_s, s_amp, cc_p, cc_s
+        out_pha.write('{0[0]},{0[1]},{0[2]},{0[3]:.2f},{0[4]:.2f},{0[5]},{0[6]:.3f},{0[7]:.3f}\n'.format(pick))
 

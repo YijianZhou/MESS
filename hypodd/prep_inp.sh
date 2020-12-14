@@ -1,4 +1,3 @@
-rm input/dt_* input/event_*
 python mk_sta.py
-python parallel_mk_dt.py
-
+python mk_dt.py
+python split_event.py
