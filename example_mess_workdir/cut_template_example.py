@@ -8,7 +8,7 @@ data_dir = '/data2/Ridgecrest'
 out_root = '/data4/bigdata/zhouyj/RC_templates'
 temp_pha = 'input/rc_pad.temp'
 
-# run MSMS cut temp
+# cut template data
 shutil.copyfile('config_rc.py', os.path.join(mess_dir, 'config.py'))
 os.system("python {}/cut_template_sac.py \
     --data_dir={} --temp_pha={} --out_root={}"\
