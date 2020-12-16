@@ -1,7 +1,6 @@
 # MESS
 Catalog augmentation (event detection) based on matched filter technique (MFT) <br>
 <br>
-
 Usage: <br>
 (1) Prepare template phase file & Cut template waveform <br>
 (2) Run MESS <br>
