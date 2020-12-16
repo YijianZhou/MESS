@@ -63,10 +63,10 @@ if __name__ == '__main__':
     if len(data_dict)<min_sta: continue
     # for all templates
     for [temp_name, temp_loc, temp_pick_dict] in temp_list:
-        # mess det
+        # 1. mess det
         print('template {}'.format(temp_name))
         dets = mess_det(temp_pick_dict, data_dict)
-        # cc pick
+        # 2. cc pick
         for [det_ot, det_cc] in dets:
             picks = cc_pick(det_ot, temp_pick_dict, data_dict)
             det_ot = date + det_ot
