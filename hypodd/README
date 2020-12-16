@@ -1,0 +1,8 @@
+1. Prepare input files: sh prep_inp.sh
+  set fpaths in config
+  tune params in config
+  *properly split event.dat by time, if the total number exceed the limit of HypoDD
+2. Run hypoDD: sh run_hypodd.sh
+  set fpaths in config
+  tune params in hypoDD.inp
+  *sequentially run_hypodd if you need to split event.dat

@@ -10,12 +10,12 @@ class Config(object):
   def __init__(self):
 
     # 1. mk_sta
-    self.fsta_in = 'input/rc_scsn_pad.sta'
+    self.fsta_in = 'input/example_pad.sta'
     self.fsta_out = 'input/station.dat'
 
     # 2. mk_dt
-    self.temp_pha = 'input/rc_pad_hyp-ct_all.pha' # reloc template phase file
-    self.det_pha = ['input/rc_mess.pha','input/test.pha'][0] # mess output phase file
+    self.temp_pha = 'input/example_pad_hyp-ct_all.pha' # reloc template phase file
+    self.det_pha = 'input/example_mess.pha' # mess output phase file
     self.time_range = '20190704-20190713'
     self.num_workers = 9
     self.evid_stride = 100000
@@ -28,7 +28,8 @@ class Config(object):
     self.calc_mag = associators.TS_Assoc(sta_dict).calc_mag
 
     # 3. reloc2csv
-    self.time_ranges = ['20190704-20190709','20190709-20190713']
-    self.fctlg = ['output/rc_mess_cc_0704-0708.ctlg','output/rc_mess_cc_0709-0712.ctlg'][0]
-    self.write_temp = [False, True][0] # set True for one of the split
+    self.split_ranges = ['20190704-20190709','20190709-20190713']
+    self.fctlg = ['output/example_mess_cc_0704-0708.ctlg',
+        'output/example_mess_cc_0709-0712.ctlg'][0]
+    self.write_temp = [False, True][1] # set one of the split as True
 

@@ -1,4 +1,4 @@
-""" Associate MESS detections
+""" Associate MESS detections --> dt.cc & event.dat
 """
 import os, glob
 from obspy import UTCDateTime
@@ -13,11 +13,12 @@ warnings.filterwarnings("ignore")
 def assoc_one_day(start_date, start_evid):
     print('associating %s'%start_date)
     print('reading detection phase file')
-    det_list = read_det_pha(det_pha, start_date, start_date+86400)
-    det_list = det_list[[temp_id in temp_loc_dict for temp_id in det_list['temp_id']]]
+    # output dt & event file
     out_dt = open('input/dt_%s.cc'%start_date.date,'w')
     out_event = open('input/event_%s.dat'%start_date.date,'w')
-    dets = det_list[(det_list['ot']>start_date)*(det_list['ot']<start_date+86400)]
+    # read & select MESS detections
+    det_list = read_det_pha(det_pha, start_date, start_date+86400)
+    dets = det_list[[temp_id in temp_loc_dict for temp_id in det_list['temp_id']]]
     dets = dets[dets['cc']>cc_thres]
     num_dets = len(dets)
     for i in range(num_dets):
@@ -39,16 +40,16 @@ def assoc_one_day(start_date, start_evid):
                 dets_reloc = np.delete(dets_reloc, j, axis=0)
                 cc = np.delete(cc, j, axis=0)
                 break
+        if not is_self: 
+            det_i = dets_reloc[np.argmax(cc)]
+            temp_loc = temp_loc_dict[det_i['temp_id']]
+        # replace temp_loc with reloc
+        det_loc = [det_i['ot']] + temp_loc[1:] + [calc_mag(det_i)]
         # sort by cc & restrict number of neighbor
-        if not is_self: det_i = dets_reloc[np.argmax(cc)]
         if len(cc)>0:
             cc_min = np.sort(cc)[::-1][0:nbr_thres[1]][-1]
-            cc_max = np.amax(cc)
             dets_reloc = dets_reloc[cc>=cc_min]
             cc = cc[cc>=cc_min]
-        # replace temp_loc with reloc
-        if not is_self: temp_loc = temp_loc_dict[det_i['temp_id']]
-        det_loc = [det_i['ot']] + temp_loc[1:] + [calc_mag(det_i)]
         # write dt.cc & event.dat
         if len(dets_reloc)>=nbr_thres[0] or is_self:
             for det in dets_reloc: write_dt(det, det_id, det['ot']-det_loc[0], out_dt)
@@ -97,12 +98,15 @@ def read_det_pha(det_pha, start_time, end_time):
 
 # write dt.cc
 def write_dt(det, evid, ot_corr, fout):
-    temp_id = det['temp_id']
-    fout.write('# {:9} {:9} 0.0\n'.format(evid, temp_id))
+    fout.write('# {:9} {:9} 0.0\n'.format(evid, det['temp_id']))
     for net_sta, [dt_p, dt_s, _, cc_p, cc_s] in det['picks'].items():
         sta = net_sta.split('.')[1]
-        if abs(dt_p)<=dt_thres[0] and cc_p>=cc_thres: fout.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, dt_p+ot_corr, cc_p**0.5))
-        if abs(dt_s)<=dt_thres[1] and cc_s>=cc_thres: fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, dt_s+ot_corr, cc_s**0.5))
+        dt_p += ot_corr
+        dt_s += ot_corr
+        if abs(dt_p)<=dt_thres[0] and cc_p>=cc_thres: 
+            fout.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, dt_p, cc_p**0.5))
+        if abs(dt_s)<=dt_thres[1] and cc_s>=cc_thres: 
+            fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, dt_s, cc_s**0.5))
 
 
 # write event.dat
@@ -149,7 +153,6 @@ if __name__ == '__main__':
   print('reading template phase file')
   temp_loc_dict = read_temp_pha(temp_pha)
   # start assoc
-#  for day_idx in range(num_days): assoc_one_day(start_date+86400*day_idx, evid_stride*(1+day_idx))
   pool = mp.Pool(num_workers)
   for day_idx in range(num_days):
     pool.apply_async(assoc_one_day, args=(start_date+86400*day_idx, evid_stride*(1+day_idx),))
