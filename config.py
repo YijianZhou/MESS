@@ -13,7 +13,7 @@ class Config(object):
     self.get_data_dict = dp.get_data_dict
     self.get_sta_dict = dp.get_sta_dict
 
-    # MFT params
+    # MESS params
     self.temp_win_det = [1.,11.]   # win for detection, pre & post P
     self.temp_win_p = [0.5,1.5]    # win for p pick, pre & post P
     self.temp_win_s = [0.5,2.5]    # win for s pick, pre & post S
