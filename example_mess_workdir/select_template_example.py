@@ -6,9 +6,9 @@
     template phase file
 """
 # i/o paths
-fpha = 'input/rc_pad_hyp_all.pha'
-fevt = 'input/rc_pad.evt'
-ftemp = open('input/rc_pad.temp','w')
+fpha = 'input/example_pad_hyp_all.pha' # --> event loc
+fevt = 'input/example_pad.evt' # --> event name
+ftemp = open('input/example_pad.temp','w')
 # selection criteria
 lat_rng = [35.5,36.]
 lon_rng = [-117.8,-117.3]

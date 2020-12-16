@@ -16,3 +16,4 @@ Input
   python run_mess_example.py --> output/example/example_mess.pha
 
 4. reloc MESS detections in hypodd dir
+  copy MESS/hypodd to your workdir
