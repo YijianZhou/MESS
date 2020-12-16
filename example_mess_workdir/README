@@ -6,7 +6,7 @@ Input
   Station file (in PAD format): input/example_pad.sta
 
 1. generate template phase file
-  python example_get_event_list.py --> input/example_pad.evt
+  python get_event_list_example.py --> input/example_pad.evt
   python select_template_example.py --> input/example_pad.temp
 
 2. cut template data
