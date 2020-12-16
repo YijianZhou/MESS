@@ -204,7 +204,6 @@ def read_stream(st_paths, gain=None):
         st += read(st_paths[1])
         st += read(st_paths[2])
     except:
-        obspy.io.sac.util.SacIOError
         print('bad data'); return []
     if not gain: return preprocess(st)
     # remove gain
