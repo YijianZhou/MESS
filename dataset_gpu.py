@@ -87,6 +87,7 @@ class Data(Dataset):
     # read stream
     net_sta = self.sta_list[index]
     st_paths = self.data_dict[net_sta]
+    if net_sta not in self.sta_dict: return net_sta, []
     gain = float(self.sta_dict[net_sta]['gain'])
     stream = read_stream(st_paths, gain)
     if len(stream)!=3: return net_sta, []
