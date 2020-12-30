@@ -49,7 +49,6 @@ def assoc_one_day(start_date, start_evid):
         if len(cc)>0:
             cc_min = np.sort(cc)[::-1][0:nbr_thres[1]][-1]
             dets_reloc = dets_reloc[cc>=cc_min]
-            cc = cc[cc>=cc_min]
         # write dt.cc & event.dat
         if len(dets_reloc)>=nbr_thres[0] or is_self:
             for det in dets_reloc: write_dt(det, det_id, det['ot']-det_loc[0], out_dt)
