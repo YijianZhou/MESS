@@ -10,14 +10,15 @@ warnings.filterwarnings("ignore")
 
 
 # assoc det
-def assoc_one_day(start_date, start_evid):
-    print('associating %s'%start_date)
+def assoc_det(time_range, start_evid):
+    print('associating %s'%time_range)
     print('reading detection phase file')
     # output dt & event file
-    out_dt = open('input/dt_%s.cc'%start_date.date,'w')
-    out_event = open('input/event_%s.dat'%start_date.date,'w')
+    out_dt = open('input/dt_%s.cc'%time_range,'w')
+    out_event = open('input/event_%s.dat'%time_range,'w')
     # read & select MESS detections
-    det_list = read_det_pha(det_pha, start_date, start_date+86400)
+    start_date, end_date = [UTCDateTime(date) for date in time_range.split('-')]
+    det_list = read_det_pha(det_pha, start_date, end_date)
     dets = det_list[[temp_id in temp_loc_dict for temp_id in det_list['temp_id']]]
     dets = dets[dets['cc']>cc_thres]
     num_dets = len(dets)
@@ -49,6 +50,7 @@ def assoc_one_day(start_date, start_evid):
         if len(cc)>0:
             cc_min = np.sort(cc)[::-1][0:nbr_thres[1]][-1]
             dets_reloc = dets_reloc[cc>=cc_min]
+            cc = cc[cc>=cc_min]
         # write dt.cc & event.dat
         if len(dets_reloc)>=nbr_thres[0] or is_self:
             for det in dets_reloc: write_dt(det, det_id, det['ot']-det_loc[0], out_dt)
@@ -113,7 +115,7 @@ def write_event(event_loc, evid, fout):
     ot, lat, lon, dep, mag = event_loc
     dep += dep_corr
     date = '{:0>4}{:0>2}{:0>2}'.format(ot.year, ot.month, ot.day)
-    time = '{:0>2}{:0>2}{:0>2}{:0>2}'.format(ot.hour, ot.minute, ot.second, int(ot.microsecond/1e4))
+    time = '{:0>2}{:0>2}{:0>2}{:0>2.0f}'.format(ot.hour, ot.minute, ot.second, ot.microsecond/1e4)
     loc = '{:7.4f}   {:8.4f}   {:8.3f}  {:4.1f}'.format(lat, lon, dep, mag)
     err_rms = '   0.00    0.00   0.0'
     fout.write('{}  {}   {} {} {:>10}\n'.format(date, time, loc, err_rms, evid))
@@ -142,19 +144,21 @@ if __name__ == '__main__':
   cc_thres = cfg.cc_thres
   dt_thres = cfg.dt_thres
   nbr_thres = cfg.nbr_thres
+  pad_calc_mag = cfg.calc_mag
   evid_stride = cfg.evid_stride
   num_workers = cfg.num_workers
-  time_range = cfg.time_range
-  start_date, end_date = [UTCDateTime(date) for date in cfg.time_range.split('-')]
-  num_days = (end_date.date - start_date.date).days
-  pad_calc_mag = cfg.calc_mag
   # read phase file
   print('reading template phase file')
   temp_loc_dict = read_temp_pha(temp_pha)
   # start assoc
+  start_date, end_date = [UTCDateTime(date) for date in cfg.time_range.split('-')]
+  dt = (end_date - start_date) / num_workers
+#  for day_idx in range(num_days): assoc_one_day(start_date+86400*day_idx, evid_stride*(1+day_idx))
   pool = mp.Pool(num_workers)
-  for day_idx in range(num_days):
-    pool.apply_async(assoc_one_day, args=(start_date+86400*day_idx, evid_stride*(1+day_idx),))
+  for proc_idx in range(num_workers):
+    t0 = ''.join(str((start_date + proc_idx*dt).date).split('-'))
+    t1 = ''.join(str((start_date + (proc_idx+1)*dt).date).split('-'))
+    pool.apply_async(assoc_det, args=('-'.join([t0, t1]), evid_stride*(1+proc_idx),))
   pool.close()
   pool.join()
   # merge files
