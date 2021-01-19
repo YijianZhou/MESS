@@ -10,7 +10,7 @@ class Config(object):
     self.win_len = [15,25]       # cut window length
     self.min_sta = 4        # min sta num for a template events
     self.max_sta = 15
-    self.get_data_dict = dp.get_rc_data
+    self.get_data_dict = dp.get_data_dict
     self.get_sta_dict = dp.get_sta_dict
 
     # MFT params
