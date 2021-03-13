@@ -1,5 +1,5 @@
 # MESS
-Catalog augmentation (event detection) based on matched filter technique (MFT) <br>
+Matched filter earthquake detector <br>
 <br>
 This method includes four steps: <br>
 (1) Match: calculate CC trace on every station (matched filter) <br>
