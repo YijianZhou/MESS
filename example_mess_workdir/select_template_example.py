@@ -1,6 +1,6 @@
 """ Selection of template events
   Input
-    hypoInverse catalog
+    fpha: located phase file (with evid)
     fevt: use evid to get the event name
   Output
     template phase file
