@@ -4,7 +4,7 @@ import os, shutil
 
 # i/o paths
 mess_dir = '/home/zhouyj/software/MESS'
-data_dir = '/data2/Example_data'
+data_dir = '/data/Example_data'
 out_root = 'output/Example_templates'
 temp_pha = 'input/example.temp'
 
