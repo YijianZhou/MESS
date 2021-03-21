@@ -19,25 +19,25 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--gpu_idx', type=str, default="0")
   parser.add_argument('--data_dir', type=str,
-                      default='/data')
+                      default='/data/Example_data')
   parser.add_argument('--time_range', type=str,
                       default='20170927-20170928')
   parser.add_argument('--sta_file', type=str,
-                        default='input/station.dat')
+                        default='input/example.sta')
   parser.add_argument('--temp_root', type=str,
-                      default='./output/Templates')
+                      default='output/Example_templates')
   parser.add_argument('--temp_pha', type=str,
-                      default='./output/temp.pha')
+                      default='output/example.temp')
   parser.add_argument('--out_ctlg', type=str,
-                      default='./output/tmp.ctlg')
+                      default='output/example.ctlg')
   parser.add_argument('--out_pha', type=str,
-                      default='./output/tmp.pha')
+                      default='output/example.pha')
   args = parser.parse_args()
+  os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_idx
 
   # MESS params
   cfg = config.Config()
   min_sta = cfg.min_sta
-  os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_idx
   # i/o paths
   out_root = os.path.split(args.out_pha)[0]
   if not os.path.exists(out_root): os.makedirs(out_root)
@@ -63,10 +63,10 @@ if __name__ == '__main__':
     if len(data_dict)<min_sta: continue
     # for all templates
     for [temp_name, temp_loc, temp_pick_dict] in temp_list:
-        # 1. mess det
+        # mess det
         print('template {}'.format(temp_name))
         dets = mess_det(temp_pick_dict, data_dict)
-        # 2. cc pick
+        # cc pick
         for [det_ot, det_cc] in dets:
             picks = cc_pick(det_ot, temp_pick_dict, data_dict)
             det_ot = date + det_ot

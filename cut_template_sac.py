@@ -20,11 +20,11 @@ from dataset_gpu import read_ftemp
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str,
-                        default='/data3/luwf_data/Trace/Linear_Pad')
+                        default='/data/Example_data')
     parser.add_argument('--temp_pha', type=str,
-                        default='/data3/luwf_data/Trace/JZG_temp/jzg_temp.pha')
+                        default='input/example.temp')
     parser.add_argument('--out_root', type=str,
-                        default='./output/tmp')
+                        default='output/example_templates')
     args = parser.parse_args()
 
 

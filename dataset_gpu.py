@@ -14,12 +14,14 @@ get_data_dict = cfg.get_data_dict
 num_workers = cfg.num_workers
 samp_rate = cfg.samp_rate
 freq_band = cfg.freq_band
+to_prep = cfg.to_prep
 temp_win_det = cfg.temp_win_det
 temp_win_p = cfg.temp_win_p
 temp_win_s = cfg.temp_win_s
-win_len_npts = [int(sum(win)*samp_rate) for win in [temp_win_det, temp_win_p, temp_win_s]]
+temp_win_npts = [int(sum(win)*samp_rate) for win in [temp_win_det, temp_win_p, temp_win_s]]
 min_sta = cfg.min_sta
 max_sta = cfg.max_sta
+
 
 def read_data(date, data_dir, sta_dict):
     """ Read data (continuous waveform)
@@ -31,6 +33,8 @@ def read_data(date, data_dir, sta_dict):
     t=time.time()
     print('reading continuous data')
     data_dict = get_data_dict(date, data_dir)
+    to_del = [net_sta for net_sta in data_dict.keys() if net_sta not in sta_dict]
+    for net_sta in to_del: data_dict.pop(net_sta)
     data_dataset = Data(data_dict, sta_dict)
     data_loader = DataLoader(data_dataset, num_workers=num_workers, batch_size=None, pin_memory=True)
     todel = []
@@ -87,9 +91,8 @@ class Data(Dataset):
     # read stream
     net_sta = self.sta_list[index]
     st_paths = self.data_dict[net_sta]
-    if net_sta not in self.sta_dict: return net_sta, []
     gain = float(self.sta_dict[net_sta]['gain'])
-    stream = read_stream(st_paths, gain)
+    stream = read_stream(st_paths, gain, True)
     if len(stream)!=3: return net_sta, []
     start_time = stream[0].stats.starttime
     end_time = stream[0].stats.endtime
@@ -98,7 +101,7 @@ class Data(Dataset):
     data_np = st2np(stream)[:, 0:int(86400*samp_rate)]
     # calc norm data (for calc_cc)
     data_cum = [np.cumsum(di**2) for di in data_np]
-    norm_data = np.array([np.sqrt(di[win_len_npts[0]:] - di[:-win_len_npts[0]]) for di in data_cum])
+    norm_data = np.array([np.sqrt(di[temp_win_npts[0]:] - di[:-temp_win_npts[0]]) for di in data_cum])
     return net_sta, [data_np, norm_data]
 
   def __len__(self):
@@ -128,14 +131,14 @@ class Templates(Dataset):
         # read template date
         st_paths = sorted(glob.glob(os.path.join(temp_dir, '%s.*'%net_sta)))
         if len(st_paths)!=3: continue
-        st = read_stream(st_paths)
+        st = read_stream(st_paths, None, to_prep)
         if len(st)!=3: continue
         # cut template data
         temp_det = trim_stream(st, tp-temp_win_det[0], tp+temp_win_det[1])
         temp_p = trim_stream(st, tp-temp_win_p[0], tp+temp_win_p[1])
         temp_s = trim_stream(st, ts-temp_win_s[0], ts+temp_win_s[1])
         temp = [st2np(st_i) for st_i in [temp_det, temp_p, temp_s]]
-        temp = [temp[i][:,0:win_len_npts[i]] for i in range(3)]
+        temp = [temp[i][:,0:temp_win_npts[i]] for i in range(3)]
         # calc norm
         norm_det = np.array([sum(tr**2)**0.5 for tr in temp[0]])
         norm_p = np.array([sum(tr**2)**0.5 for tr in temp[1]])
@@ -172,7 +175,7 @@ def read_ftemp(ftemp):
     return temp_list
 
 
-""" Stream processing
+""" Signal processing
 """
 
 def preprocess(stream):
@@ -191,14 +194,18 @@ def preprocess(stream):
     if resamp_factor!=1: st = st.interpolate(samp_rate)
     # filter
     st = st.detrend('demean').detrend('linear').taper(max_percentage=0.05, max_length=10.)
-    filter_type, freq_range = freq_band
-    if filter_type=='highpass':
-        return st.filter(filter_type, freq=freq_range)
-    if filter_type=='bandpass':
-        return st.filter(filter_type, freqmin=freq_range[0], freqmax=freq_range[1])
+    freq_min, freq_max = freq_band
+    if freq_min and freq_max:
+        return st.filter('bandpass', freqmin=freq_min, freqmax=freq_max)
+    elif not freq_max and freq_min:
+        return st.filter('highpass', freq=freq_min)
+    elif not freq_min and freq_max:
+        return st.filter('lowpass', freq=freq_max)
+    else:
+        print('filter type not supported!'); return []
 
 
-def read_stream(st_paths, gain=None):
+def read_stream(st_paths, gain=None, to_prep=True):
     # read data
     try:
         st  = read(st_paths[0])
@@ -206,10 +213,13 @@ def read_stream(st_paths, gain=None):
         st += read(st_paths[2])
     except:
         print('bad data'); return []
-    if not gain: return preprocess(st)
+    if not gain: 
+        if to_prep: return preprocess(st)
+        else: return st
     # remove gain
     for i in range(3): st[i].data /= gain
-    return preprocess(st)
+    if to_prep: return preprocess(st)
+    else: return st
 
 
 def trim_stream(stream, start_time, end_time):

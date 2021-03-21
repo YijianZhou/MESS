@@ -24,7 +24,6 @@ det_gap = int(samp_rate * cfg.det_gap)
 chn_p = cfg.chn_p
 chn_s = cfg.chn_s
 trig_thres = cfg.trig_thres
-get_amp = cfg.get_amp
 
 
 def mess_det(temp_pick_dict, data_dict):
@@ -98,7 +97,7 @@ def cc_pick(det_ot, temp_pick_dict, data_dict):
         dt_p, dt_s = (tp_idx-tp0)/samp_rate, (ts_idx-ts0)/samp_rate
         cc_p_max, cc_s_max = np.amax(cc_p), np.amax(cc_s)
         # 2. get amplitude
-        s_amp = get_amp(data_np[:, tp_idx-amp_win[0] : ts_idx+amp_win[1]], samp_rate)
+        s_amp = get_s_amp(data_np[:, tp_idx-amp_win[0] : ts_idx+amp_win[1]])
         picks.append([net_sta, tp, ts, dt_p, dt_s, s_amp, cc_p_max, cc_s_max])
     return picks
 
@@ -161,7 +160,7 @@ def expand_cc(cc):
         idx_1 = idx_max + expand_len//2
         cc[idx_0:idx_1] = cc_max
         # next trig
-        slide_idx = trig_idx + 2*expand_len + det_gap
+        slide_idx = trig_idx + expand_len + det_gap
     return cc
 
 
@@ -188,8 +187,18 @@ def det_cc_stack(cc_stack):
         det_ot = (det_idx + np.median(np.where(cc_det == cc_max)[0])) / samp_rate
         dets.append([det_ot, cc_max]) 
         # next det
-        slide_idx = det_idx + 2*expand_len + det_gap
+        slide_idx = det_idx + expand_len + det_gap
     return dets
+
+
+# get S amplitide
+def get_s_amp(velo):
+    # remove mean
+    velo -= np.reshape(np.mean(velo, axis=1), [velo.shape[0],1])
+    # velocity to displacement
+    disp = np.cumsum(velo, axis=1)
+    disp /= samp_rate
+    return np.amax(np.sum(disp**2, axis=0))**0.5
 
 
 # write detection to catalog

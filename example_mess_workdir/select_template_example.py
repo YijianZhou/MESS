@@ -5,13 +5,17 @@
   Output
     template phase file
 """
+from obspy import UTCDateTime
+
 # i/o paths
-fpha = 'input/example_pad_hyp_all.pha' # --> event loc
-fevt = 'input/example_pad.evt' # --> event name
-ftemp = open('input/example_pad.temp','w')
+fpha = 'input/example_full.pha'
+fevt = 'input/example.evt'
+ftemp = open('input/example.temp','w')
 # selection criteria
-lat_rng = [35.5,36.]
-lon_rng = [-117.8,-117.3]
+ot_range = '20190704-20190717'
+ot_range = [UTCDateTime(code) for code in ot_range.split('-')]
+lat_range = [35.5,36.]
+lon_range = [-117.8,-117.3]
 
 print('get event_dict')
 event_dict = {}
@@ -27,9 +31,11 @@ for line in lines:
     # if event line
     if len(codes[0])>=14:
         is_temp = True
+        ot = UTCDateTime(codes[0])
+        if not ot_range[0]<ot<ot_range[1]: is_temp = False
         lat, lon = [float(code) for code in codes[1:3]]
-        if not lat_rng[0]<lat<lat_rng[1]: is_temp = False
-        if not lon_rng[0]<lon<lon_rng[1]: is_temp = False
+        if not lat_range[0]<lat<lat_range[1]: is_temp = False
+        if not lon_range[0]<lon<lon_range[1]: is_temp = False
         evid = codes[-1][:-1]
         event_name = event_dict[evid]
         ot, lat, lon, dep, mag = codes[0:5]

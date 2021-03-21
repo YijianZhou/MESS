@@ -1,13 +1,13 @@
 Copy this directory to anywhere you like as working directory
 
 Input
-  PAD detection: input/example_pad.pha
-  PAD HypoInverse phase file (with evid): input/example_pad_hyp_all.pha
-  Station file (in PAD format): input/example_pad.sta
+  initial detection: input/example.pha
+  Located phase file (with evid): input/example_full.pha
+  Station file: input/example.sta
 
 1. generate template phase file
-  python get_event_list_example.py --> input/example_pad.evt
-  python select_template_example.py --> input/example_pad.temp
+  python get_event_list_example.py --> input/example.evt
+  python select_template_example.py --> input/example.temp
 
 2. cut template data
   python cut_template_example.py
