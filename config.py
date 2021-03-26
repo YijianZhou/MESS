@@ -11,7 +11,6 @@ class Config(object):
     self.max_sta = 15
     self.get_data_dict = dp.get_data_dict
     self.get_sta_dict = dp.get_sta_dict
-
     # MFT params
     self.temp_win_det = [1.,11.]   # win for detection, pre & post P
     self.temp_win_p = [0.5,1.5]    # win for p pick, pre & post P
@@ -24,7 +23,6 @@ class Config(object):
     self.chn_p = [2]
     self.chn_s = [0,1]
     self.amp_win = [1, 4]
-
     # data process
     self.to_prep = False           # False if templates are preprocessed 
     self.samp_rate = 50
