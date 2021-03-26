@@ -20,7 +20,7 @@ def assoc_det(time_range, start_evid):
     start_date, end_date = [UTCDateTime(date) for date in time_range.split('-')]
     det_list = read_det_pha(det_pha, start_date, end_date)
     dets = det_list[[temp_id in temp_loc_dict for temp_id in det_list['temp_id']]]
-    dets = dets[dets['cc']>cc_thres]
+    dets = dets[dets['cc']>=cc_thres]
     num_dets = len(dets)
     for i in range(num_dets):
         if i%500==0: print('{} events associated | left {}'.format(i, len(dets)))
@@ -33,19 +33,15 @@ def assoc_det(time_range, start_evid):
         # whether self-det
         is_self = False
         for j,det in enumerate(dets_reloc):
-            temp_loc = temp_loc_dict[det['temp_id']]
-            if abs(temp_loc[0]-det['ot'])<ot_dev: 
-                det_i = det
-                det_id = det['temp_id']
-                is_self = True
-                dets_reloc = np.delete(dets_reloc, j, axis=0)
-                cc = np.delete(cc, j, axis=0)
-                break
-        if not is_self: 
-            det_i = dets_reloc[np.argmax(cc)]
-            temp_loc = temp_loc_dict[det_i['temp_id']]
-        # replace temp_loc with reloc
-        det_loc = [det_i['ot']] + temp_loc[1:] + [calc_mag(det_i)]
+            temp_ot = temp_loc_dict[det['temp_id']][0]
+            if abs(temp_ot-det['ot'])>ot_dev: continue
+            det_i = det
+            det_id = det['temp_id']
+            is_self = True
+            dets_reloc = np.delete(dets_reloc, j, axis=0)
+            cc = np.delete(cc, j, axis=0)
+            break
+        if not is_self: det_i = dets_reloc[np.argmax(cc)]
         # sort by cc & restrict number of neighbor
         if len(cc)>0:
             cc_min = np.sort(cc)[::-1][0:nbr_thres[1]][-1]
@@ -53,6 +49,15 @@ def assoc_det(time_range, start_evid):
             cc = cc[cc>=cc_min]
         # write dt.cc & event.dat
         if len(dets_reloc)>=nbr_thres[0] or is_self:
+            # set init loc & calc mag
+            if is_self: temp_loc = temp_loc_dict[det_i['temp_id']][1:4]
+            else: 
+                temp_loc = np.zeros([len(dets_reloc),3])
+                for j,det in enumerate(dets_reloc): 
+                    temp_loc[j] = temp_loc_dict[det['temp_id']][1:4]
+                temp_loc = list(np.mean(temp_loc, axis=0))
+            # replace temp_loc with reloc
+            det_loc = [det_i['ot']] + temp_loc + [calc_mag(det_i)]
             for det in dets_reloc: write_dt(det, det_id, det['ot']-det_loc[0], out_dt)
             write_event(det_loc, det_id, out_event)
         # next det
@@ -121,14 +126,42 @@ def write_event(event_loc, evid, fout):
     fout.write('{}  {}   {} {} {:>10}\n'.format(date, time, loc, err_rms, evid))
 
 
-# calc mag with PAD assoc
+# calc mag with PAL assoc
 def calc_mag(event):
     event_loc = {'evt_lat':event['loc'][0], 'evt_lon':event['loc'][1]}
     event_pick = np.array([(net_sta, s_amp) \
         for net_sta, [_,_,s_amp,_,_] in event['picks'].items()],
         dtype=[('net_sta','O'),('s_amp','O')])
-    event_loc = pad_calc_mag(event_pick, event_loc)
+    event_loc = pal_calc_mag(event_pick, event_loc)
     return event_loc['mag']
+
+
+def select_dt():
+    print('select unique dt.cc pairs')
+    # read dt.cc
+    dt_list = []
+    f=open('input/dt.cc'); lines=f.readlines(); f.close()
+    for line in lines:
+        codes = line.split()
+        if line[0]=='#': 
+            evid1, evid2 = np.sort(np.array([int(code) for code in codes[1:3]]))
+            evid_key = '%s.%s'%(evid1, evid2)
+            dt_list.append([evid_key, [line]])
+        else: dt_list[-1][-1].append(line)
+    # select unique dt pairs
+    dt_dict = {}
+    for [evid_key, lines] in dt_list:
+        if evid_key not in dt_dict: dt_dict[evid_key] = lines
+        else: 
+           if len(dt_dict[evid_key])>len(lines): continue
+           else: dt_dict[evid_key] = lines
+    # write dt.cc
+    fout = open('input/dt.cc','w')
+    for lines in dt_dict.values():
+        sta_list = np.unique([line.split()[0] for line in lines[1:]])
+        if len(sta_list)<min_sta: continue
+        for line in lines: fout.write(line)
+    fout.close()
 
 
 if __name__ == '__main__':
@@ -144,8 +177,9 @@ if __name__ == '__main__':
   cc_thres = cfg.cc_thres
   dt_thres = cfg.dt_thres
   nbr_thres = cfg.nbr_thres
-  pad_calc_mag = cfg.calc_mag
+  pal_calc_mag = cfg.calc_mag
   evid_stride = cfg.evid_stride
+  min_sta = cfg.min_sta
   num_workers = cfg.num_workers
   # read phase file
   print('reading template phase file')
@@ -153,7 +187,6 @@ if __name__ == '__main__':
   # start assoc
   start_date, end_date = [UTCDateTime(date) for date in cfg.time_range.split('-')]
   dt = (end_date - start_date) / num_workers
-#  for day_idx in range(num_days): assoc_one_day(start_date+86400*day_idx, evid_stride*(1+day_idx))
   pool = mp.Pool(num_workers)
   for proc_idx in range(num_workers):
     t0 = ''.join(str((start_date + proc_idx*dt).date).split('-'))
@@ -161,9 +194,10 @@ if __name__ == '__main__':
     pool.apply_async(assoc_det, args=('-'.join([t0, t1]), evid_stride*(1+proc_idx),))
   pool.close()
   pool.join()
-  # merge files
+  # merge files & post-process
   os.system('cat input/dt_*.cc > input/dt.cc')
   os.system('cat input/event_*.dat > input/event.dat')
   for fname in glob.glob('input/dt_*.cc'): os.unlink(fname)
   for fname in glob.glob('input/event_*.dat'): os.unlink(fname)
-  
+  select_dt()
+

@@ -7,8 +7,7 @@ input/dt.cc
 input/dt.ct
 *
 * event file:
-input/event_20190704-20190709.dat
-*input/event_20190709-20190713.dat
+input/event.dat
 *
 * station file:
 input/station.dat
@@ -54,7 +53,7 @@ output/hypoDD.src
 * DAMP:    		damping (for lsqr only) 
 *       ---  CROSS DATA ----- ----CATALOG DATA ----
 * NITER WTCCP WTCCS WRCC WDCC WTCTP WTCTS WRCT WDCT DAMP
-  6     0.5    1.0   6    6   -9    -9    -9   -9   120
+  5     0.5    1.0   6    4   -9    -9    -9   -9   120
 *
 *--- 1D model:
 * NLAY:		number of model layers  
