@@ -97,7 +97,9 @@ def cc_pick(det_ot, temp_pick_dict, data_dict):
         dt_p, dt_s = (tp_idx-tp0)/samp_rate, (ts_idx-ts0)/samp_rate
         cc_p_max, cc_s_max = np.amax(cc_p), np.amax(cc_s)
         # 2. get amplitude
-        s_amp = get_s_amp(data_np[:, tp_idx-amp_win[0] : ts_idx+amp_win[1]])
+        data_amp = data_np[:, tp_idx-amp_win[0] : ts_idx+amp_win[1]]
+        if data_amp.shape[1]<amp_win[0]: continue
+        s_amp = get_s_amp(data_amp)
         picks.append([net_sta, tp, ts, dt_p, dt_s, s_amp, cc_p_max, cc_s_max])
     return picks
 
