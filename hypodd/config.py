@@ -2,7 +2,6 @@
 """
 import os, sys
 sys.path.append('/home/zhouyj/software/PAL')
-import associator_pal
 import data_pipeline as dp
 
 class Config(object):
@@ -24,8 +23,7 @@ class Config(object):
     self.dt_thres = [0.6,1.] # max dt_p & dt_s
     self.nbr_thres = [3,30] # min & max num of neighbor event
     self.min_sta = 4
-    sta_dict = dp.get_sta_dict(self.fsta_in)
-    self.calc_mag = associator_pal.TS_Assoc(sta_dict).calc_mag
+    self.sta_dict = dp.get_sta_dict(self.fsta_in)
 
     # 3. reloc2csv
     self.ot_range = '20190704-20190717'

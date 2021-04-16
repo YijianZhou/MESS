@@ -126,14 +126,24 @@ def write_event(event_loc, evid, fout):
     fout.write('{}  {}   {} {} {:>10}\n'.format(date, time, loc, err_rms, evid))
 
 
-# calc mag with PAL assoc
 def calc_mag(event):
-    event_loc = {'evt_lat':event['loc'][0], 'evt_lon':event['loc'][1]}
-    event_pick = np.array([(net_sta, s_amp) \
-        for net_sta, [_,_,s_amp,_,_] in event['picks'].items()],
-        dtype=[('net_sta','O'),('s_amp','O')])
-    event_loc = pal_calc_mag(event_pick, event_loc)
-    return event_loc['mag']
+    evt_lat, evt_lon, evt_dep = event['loc']
+    num_sta = len(event['picks'])
+    mag = -np.ones(num_sta)
+    for i,[net_sta, [_,_,s_amp,_,_]] in enumerate(event['picks'].items()):
+        # get sta_loc
+        sta_loc = sta_dict[net_sta]
+        amp = s_amp * 1e6 # m to miu m
+        # calc epi dist
+        dist_lat = 111*(sta_loc['sta_lat'] - evt_lat)
+        dist_lon = 111*(sta_loc['sta_lon'] - evt_lon) \
+                   * np.cos(sta_loc['sta_lat'] * np.pi/180)
+        dist = np.sqrt(dist_lon**2 + dist_lat**2 + evt_dep**2)
+        mag[i] = np.log10(amp) + np.log10(dist)
+    # remove one outlier
+    mag_dev = abs(mag - np.median(mag))
+    mag = np.delete(mag, np.argmax(mag_dev))
+    return round(np.median(mag),2)
 
 
 def select_dt():
@@ -170,6 +180,7 @@ if __name__ == '__main__':
   dep_corr = cfg.dep_corr
   temp_pha = cfg.temp_pha
   det_pha = cfg.det_pha
+  sta_dict = cfg.sta_dict
   for fname in glob.glob('input/dt_*.cc'): os.unlink(fname)
   for fname in glob.glob('input/event_*.dat'): os.unlink(fname)
   # assoc params
@@ -177,7 +188,6 @@ if __name__ == '__main__':
   cc_thres = cfg.cc_thres
   dt_thres = cfg.dt_thres
   nbr_thres = cfg.nbr_thres
-  pal_calc_mag = cfg.calc_mag
   evid_stride = cfg.evid_stride
   min_sta = cfg.min_sta
   num_workers = cfg.num_workers
