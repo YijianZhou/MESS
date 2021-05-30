@@ -230,7 +230,8 @@ def trim_stream(stream, start_time, end_time):
 """
 
 def st2np(stream):
-    return np.array([trace.data for trace in stream], dtype=np.float64)
+    npts = min([len(trace) for trace in stream])
+    return np.array([trace.data[0:npts] for trace in stream], dtype=np.float64)
 
 def dtime2str(dtime):
     date = ''.join(str(dtime).split('T')[0].split('-'))
