@@ -5,7 +5,6 @@ import torch
 import torch.nn.functional as F
 from scipy.signal import correlate
 import numpy as np
-from numba import jit
 from dataset_gpu import cpu2cuda
 import config
 
@@ -149,7 +148,6 @@ def match_filter(data_list, temp_list):
 
 
 # 2. expand peak value in CC trace
-@jit
 def expand_cc(cc):
     trig_idxs = np.where(cc>trig_thres)[0]
     slide_idx = 0
@@ -167,7 +165,6 @@ def expand_cc(cc):
 
 
 # 3. shift time shift to ot
-@jit
 def shift_ot(cc_list, dt_ot_list, cc_holder):
     for i,dt_ot in enumerate(dt_ot_list):
         cc_i = cc_list[i][max(0,-dt_ot) : cc_holder.shape[1] - dt_ot]
@@ -176,7 +173,6 @@ def shift_ot(cc_list, dt_ot_list, cc_holder):
 
 
 # 4. detect on stacked cc trace
-@jit
 def det_cc_stack(cc_stack):
     det_idxs = np.where(cc_stack>trig_thres)[0]
     slide_idx = 0
