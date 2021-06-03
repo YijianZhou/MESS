@@ -44,7 +44,7 @@ def get_fout_idx(lat, lon):
 f=open(fevent); lines=f.readlines(); f.close()
 for line in lines:
     codes = line.split()
-    ot = UTCDateTime(codes[0]+codes[1][:-2])
+    ot = UTCDateTime(codes[0]+codes[1][0:6])
     lat, lon = [float(code) for code in codes[2:4]]
     evid = int(codes[-1])
     evid_idx, fout_idx = get_fout_idx(lat, lon)
