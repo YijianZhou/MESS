@@ -120,7 +120,7 @@ def write_event(event_loc, evid, fout):
     ot, lat, lon, dep, mag = event_loc
     dep += dep_corr
     date = '{:0>4}{:0>2}{:0>2}'.format(ot.year, ot.month, ot.day)
-    time = '{:0>2}{:0>2}{:0>2}{:0>2.0f}'.format(ot.hour, ot.minute, ot.second, ot.microsecond/1e4)
+    time = '{:0>2}{:0>2}{:0>2}{:0>2}'.format(ot.hour, ot.minute, ot.second, int(ot.microsecond/1e4))
     loc = '{:7.4f}   {:8.4f}   {:8.3f}  {:4.1f}'.format(lat, lon, dep, mag)
     err_rms = '   0.00    0.00   0.0'
     fout.write('{}  {}   {} {} {:>10}\n'.format(date, time, loc, err_rms, evid))
