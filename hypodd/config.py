@@ -26,7 +26,6 @@ class Config(object):
     self.sta_dict = dp.get_sta_dict(self.fsta_in)
 
     # 3. reloc2csv
-    self.ot_range = '20190704-20190717'
     self.lat_range = [35.4,36.1]
     self.lon_range = [-117.85,-117.25]
     self.xy_pad = [0.046,0.037] # degree
