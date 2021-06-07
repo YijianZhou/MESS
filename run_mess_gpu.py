@@ -76,6 +76,7 @@ if __name__ == '__main__':
                 print('{0[0]:<7} | dt_p {0[3]:<5.2f}s, dt_s {0[4]:<5.2f}s | cc_p {0[6]:.3f}, cc_s {0[7]:.3f}'.format(picks[i]))
             write_ctlg(det_ot, det_cc, temp_name, temp_loc, out_ctlg)
             write_pha(det_ot, det_cc, temp_name, temp_loc, picks, out_pha)
+    del data_dict
   out_ctlg.close()
   out_pha.close()
 
