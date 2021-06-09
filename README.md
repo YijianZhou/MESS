@@ -13,4 +13,4 @@ Usage (see __example_mess_workdir__): <br>
 (2) Run MESS <br>
 
 **Installation** <br>
-MESS is a set of codes. All you need is to setup proper Python environment. This can be accomplished easily by installing [Anaconda](https://www.anaconda.com/products/individual#Downloads), [Obspy](https://github.com/obspy/obspy/wiki/Installation-via-Anaconda), and [Pytorch](https://pytorch.org/) sequentially. Or you can use the *env/mess.yml* file in the with *conda*. 
+MESS is a set of codes. All you need is to setup proper Python environment. This can be accomplished easily by installing [Anaconda](https://www.anaconda.com/products/individual#Downloads), [Obspy](https://github.com/obspy/obspy/wiki/Installation-via-Anaconda), and [Pytorch](https://pytorch.org/) sequentially. Or you can use the *env/mess.yml* file with *conda*. 
