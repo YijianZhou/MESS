@@ -8,9 +8,7 @@ class Config(object):
   def __init__(self):
 
     # 1. mk_sta
-    self.fsta_in = 'input/example_pal.sta'
-    self.fsta_out = 'input/station.dat'
-
+    self.fsta = 'input/example_pal.sta'
     # 2. mk_dt
     self.temp_pha = 'input/example_pal_hyp-ct_full.pha' # reloc template phase file
     self.det_pha = 'input/example_mess.pha' # mess output phase file
@@ -24,7 +22,6 @@ class Config(object):
     self.nbr_thres = [3,30] # min & max num of neighbor event
     self.min_sta = 4
     self.sta_dict = dp.get_sta_dict(self.fsta_in)
-
     # 3. reloc2csv
     self.lat_range = [35.4,36.1]
     self.lon_range = [-117.85,-117.25]
