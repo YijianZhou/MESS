@@ -7,6 +7,7 @@ import data_pipeline as dp
 class Config(object):
   def __init__(self):
 
+    self.hypo_root = '/home/zhouyj/bin'
     # 1. mk_sta
     self.fsta = 'input/example_pal.sta'
     # 2. mk_dt

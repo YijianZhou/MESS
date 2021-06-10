@@ -12,6 +12,7 @@ dep_corr = cfg.dep_corr
 num_grids = cfg.num_grids
 num_workers = cfg.num_workers
 keep_grids = cfg.keep_grids
+hypo_root = cfg.hypo_root
 
 
 # write hypoDD input file
@@ -38,7 +39,7 @@ class Run_HypoDD(Dataset):
     out_ctlg = open('output/%s_%s-%s.ctlg'%(ctlg_code, i,j),'w')
     write_fin(i,j)
     # 3. run hypoDD
-    os.system('hypoDD input/hypoDD_%s-%s.inp > output/%s-%s.hypoDD'%(i,j,i,j))
+    os.system('%s/hypoDD input/hypoDD_%s-%s.inp > output/%s-%s.hypoDD'%(hypo_root,i,j,i,j))
     # 4. format output
     freloc = 'output/hypoDD_%s-%s.reloc'%(i,j)
     if not os.path.exists(freloc): 
