@@ -160,7 +160,7 @@ class Templates(Dataset):
 def read_ftemp(ftemp):
     f=open(ftemp); lines=f.readlines(); f.close()
     temp_list = []
-    for line in lines[0:111]:
+    for line in lines:
         codes = line.split(',')
         if len(codes[0])>=14:
             id_name = codes[0]
