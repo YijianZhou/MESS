@@ -22,7 +22,7 @@ class Config(object):
     self.dt_thres = [0.6,1.] # max dt_p & dt_s
     self.nbr_thres = [3,30] # min & max num of neighbor event
     self.min_sta = 4
-    self.sta_dict = dp.get_sta_dict(self.fsta_in)
+    self.sta_dict = dp.get_sta_dict(self.fsta)
     # 3. reloc2csv
     self.lat_range = [35.4,36.1]
     self.lon_range = [-117.85,-117.25]
