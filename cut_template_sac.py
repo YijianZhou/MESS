@@ -109,7 +109,7 @@ if __name__ == '__main__':
     dataloader = DataLoader(dataset, num_workers=num_workers, batch_size=None)
     for i, data_paths_i in enumerate(dataloader):
         data_paths += data_paths_i
-        if i%10==0: print('%s/%s events done/total'%(i+1,len(dataset)))
+        if i%10==0: print('%s/%s events done/total'%(i,len(dataset)))
     fout_data_paths = os.path.join(args.out_root,'data_paths.npy')
     np.save(fout_data_paths, data_paths)
 
