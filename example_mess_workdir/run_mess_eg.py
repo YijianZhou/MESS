@@ -2,7 +2,7 @@ import os, shutil
 
 # i/o paths
 mess_dir = '/home/zhouyj/software/MESS'
-data_dir = '/data1/Example_data'
+data_dir = '/data/Example_data'
 time_range = '20190704-20190707'
 sta_file = 'input/example_pal.sta'
 temp_root = 'output/Example_templates'
