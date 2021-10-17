@@ -22,7 +22,6 @@ class Config(object):
     self.amp_win = [1,4]           # win for amp measurement
 
     # data process
-    self.to_prep = False    # if to prep template in run_mess stage
     self.samp_rate = 50
     self.freq_band = [2.,40.]
     self.num_workers = 10

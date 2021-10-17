@@ -75,4 +75,3 @@ if __name__ == '__main__':
             write_pha(det_ot, det_cc, temp_name, temp_loc, picks, out_pha)
   out_ctlg.close()
   out_pha.close()
-
