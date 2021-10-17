@@ -14,7 +14,7 @@ import torch.multiprocessing as mp
 from torch.utils.data import Dataset, DataLoader
 from obspy import read, UTCDateTime
 import config
-from dataset_gpu import read_ftemp
+from dataset_gpu import read_ftemp, preprocess
 import subprocess
 os.putenv("SAC_DISPLAY_COPYRIGHT", '0')
 import warnings
@@ -82,11 +82,20 @@ class Cut_Templates(Dataset):
         sac_cut(data_paths[0], b_list[0], b_list[0]+sum(win_len), out_paths[0])
         sac_cut(data_paths[1], b_list[1], b_list[1]+sum(win_len), out_paths[1])
         sac_cut(data_paths[2], b_list[2], b_list[2]+sum(win_len), out_paths[2])
+        # preprocess
+        st  = read(out_paths[0])
+        st += read(out_paths[1])
+        st += read(out_paths[2])
+        st = preprocess(st)
+        if len(st)!=3: 
+            for out_path in out_paths: os.unlink(out_path)
+            continue
         # write header & record out_paths
         t0 = win_len[0]
         t1 = ts - tp + win_len[0]
-        tn = {'t0':t0, 't1':t1}
-        for ii in range(3): sac_ch(out_paths[ii], tn)
+        for ii in range(3): 
+            st[ii].stats.sac.t0, st[ii].stats.sac.t1 = t0, t1
+            st[ii].write(out_paths[ii], format='sac')
         data_paths_i.append(out_paths)
     return data_paths_i
 
