@@ -91,7 +91,7 @@ class Data(Dataset):
     net_sta = self.sta_list[index]
     st_paths = self.data_dict[net_sta]
     gain = float(self.sta_dict[net_sta]['gain'])
-    stream = read_stream(st_paths, gain, True)
+    stream = read_stream(st_paths, gain)
     if len(stream)!=3: return net_sta, []
     start_time = stream[0].stats.starttime
     end_time = stream[0].stats.endtime
