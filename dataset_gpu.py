@@ -14,7 +14,6 @@ get_data_dict = cfg.get_data_dict
 num_workers = cfg.num_workers
 samp_rate = cfg.samp_rate
 freq_band = cfg.freq_band
-to_prep = cfg.to_prep
 temp_win_det = cfg.temp_win_det
 temp_win_p = cfg.temp_win_p
 temp_win_s = cfg.temp_win_s
@@ -131,7 +130,7 @@ class Templates(Dataset):
         # read template date
         st_paths = sorted(glob.glob(os.path.join(temp_dir, '%s.*'%net_sta)))
         if len(st_paths)!=3: continue
-        st = read_stream(st_paths, None, to_prep)
+        st = read_stream(st_paths, None)
         if len(st)!=3: continue
         # cut template data
         temp_det = trim_stream(st, tp-temp_win_det[0], tp+temp_win_det[1])
@@ -205,7 +204,7 @@ def preprocess(stream):
         print('filter type not supported!'); return []
 
 
-def read_stream(st_paths, gain=None, to_prep=True):
+def read_stream(st_paths, gain=None):
     # read data
     try:
         st  = read(st_paths[0])
@@ -213,13 +212,10 @@ def read_stream(st_paths, gain=None, to_prep=True):
         st += read(st_paths[2])
     except:
         print('bad data'); return []
-    if not gain: 
-        if to_prep: return preprocess(st)
-        else: return st
+    if not gain: return preprocess(st)
     # remove gain
     for i in range(3): st[i].data /= gain
-    if to_prep: return preprocess(st)
-    else: return st
+    return preprocess(st)
 
 
 def trim_stream(stream, start_time, end_time):
