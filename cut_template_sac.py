@@ -39,20 +39,6 @@ def sac_cut(fpath, b, e, out_path):
     p.communicate(s.encode())
 
 
-def sac_ch(fpath, tn={}):
-    p = subprocess.Popen(['sac'], stdin=subprocess.PIPE)
-    s = "wild echo off \n"
-    s += "rh %s \n" %(fpath)
-    s += "ch lovrok TRUE \n"
-    s += "wh \n"
-    s += "rh %s \n" %(fpath)
-    for ti_code,ti in tn.items():
-        s += "ch %s %s \n" %(ti_code,ti)
-    s += "wh \n"
-    s += "q \n"
-    p.communicate(s.encode())
-
-
 class Cut_Templates(Dataset):
   """ Dataset for cutting templates
   """
