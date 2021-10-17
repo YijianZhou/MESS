@@ -20,7 +20,7 @@ def assoc_det(time_range, start_evid):
     start_date, end_date = [UTCDateTime(date) for date in time_range.split('-')]
     det_list = read_det_pha(det_pha, start_date, end_date)
     dets = det_list[[temp_id in temp_loc_dict for temp_id in det_list['temp_id']]]
-    dets = dets[dets['cc']>=cc_thres]
+    dets = dets[dets['cc']>=cc_thres[0]]
     num_dets = len(dets)
     for i in range(num_dets):
         if i%500==0: print('{} events associated | left {}'.format(i, len(dets)))
@@ -109,9 +109,9 @@ def write_dt(det, evid, ot_corr, fout):
         sta = net_sta.split('.')[1]
         dt_p += ot_corr
         dt_s += ot_corr
-        if abs(dt_p)<=dt_thres[0] and cc_p>=cc_thres: 
+        if abs(dt_p)<=dt_thres[0] and cc_p>=cc_thres[1]: 
             fout.write('{:7} {:8.5f} {:.4f} P\n'.format(sta, dt_p, cc_p**0.5))
-        if abs(dt_s)<=dt_thres[1] and cc_s>=cc_thres: 
+        if abs(dt_s)<=dt_thres[1] and cc_s>=cc_thres[1]: 
             fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, dt_s, cc_s**0.5))
 
 

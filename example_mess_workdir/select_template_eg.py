@@ -8,11 +8,11 @@
 from obspy import UTCDateTime
 
 # i/o paths
-fpha = 'input/example_full.pha'
-fevt = 'input/example.evt'
-ftemp = open('input/example.temp','w')
+fpha = 'input/eg_pal_hyp_full.pha'
+fevt = 'input/eg_pal.evt'
+ftemp = open('input/eg_pal.temp','w')
 # selection criteria
-ot_range = '20190704-20190717'
+ot_range = '20190704-20190707'
 ot_range = [UTCDateTime(code) for code in ot_range.split('-')]
 lat_range = [35.5,36.]
 lon_range = [-117.8,-117.3]

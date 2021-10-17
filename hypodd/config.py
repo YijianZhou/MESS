@@ -11,22 +11,22 @@ class Config(object):
     # 1. mk_sta
     self.fsta = 'input/example_pal.sta'
     # 2. mk_dt
-    self.temp_pha = 'input/example_pal_hyp-ct_full.pha' # reloc template phase file
-    self.det_pha = 'input/example_mess.pha' # mess output phase file
-    self.time_range = '20190704-20190717'
-    self.num_workers = 13
+    self.temp_pha = 'input/eg_pal_ct_full.pha' # reloc template phase file
+    self.det_pha = 'input/eg_mess.pha' # mess output phase file
+    self.time_range = '20190704-20190707'
+    self.num_workers = 3
     self.evid_stride = 100000
     self.dep_corr = 5 # avoid air quake
     self.ot_dev = 2. # ot diff for det assoc
-    self.cc_thres = 0.25 # select high cc event pairs
+    self.cc_thres = [0.3,0.4] # CC thres for det & pick
     self.dt_thres = [0.6,1.] # max dt_p & dt_s
-    self.nbr_thres = [3,30] # min & max num of neighbor event
+    self.nbr_thres = [2,30] # min & max num of neighbor event
     self.min_sta = 4
     self.sta_dict = dp.get_sta_dict(self.fsta)
     # 3. reloc2csv
     self.lat_range = [35.4,36.1]
     self.lon_range = [-117.85,-117.25]
     self.xy_pad = [0.046,0.037] # degree
-    self.num_grids = [25,25] # x,y (lon, lat)
-    self.ctlg_code = 'example_mess_cc'
+    self.num_grids = [1,1] # x,y (lon, lat)
+    self.ctlg_code = 'eg_mess_cc'
     self.keep_grids = False

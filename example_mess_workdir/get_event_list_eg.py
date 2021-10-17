@@ -7,8 +7,8 @@
 from obspy import UTCDateTime
 
 # i/o paths
-fpha = 'input/example.pha'
-fevt = open('input/example.evt','w')
+fpha = 'input/eg_pal.pha'
+fevt = open('input/eg_pal.evt','w')
 
 def dtime2str(dtime):
     date = ''.join(str(dtime).split('T')[0].split('-'))
