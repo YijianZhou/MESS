@@ -7,14 +7,12 @@
     temp_root/temp_name/net.sta.chn
     Note: temp_name == ot (yyyymmddhhmmss.ss)
 """
-import os, sys, glob, shutil
-sys.path.append('/home/zhouyj/software/data_prep')
+import os, glob, shutil
 import argparse
 import numpy as np
 import torch.multiprocessing as mp
 from torch.utils.data import Dataset, DataLoader
 from obspy import read, UTCDateTime
-import sac
 from dataset_gpu import read_ftemp, preprocess
 import config
 import warnings
@@ -43,6 +41,18 @@ def get_sta_date(event_list):
                 sta_date_dict[sta_date] = [[event_dir, tp, ts]]
             else: sta_date_dict[sta_date].append([event_dir, tp, ts])
     return sta_date_dict
+
+
+def obspy_slice(stream, t0, t1):
+    st = stream.slice(t0, t1)
+    for tr in st:
+        tr.stats.sac.nzyear = t0.year
+        tr.stats.sac.nzjday = t0.julday
+        tr.stats.sac.nzhour = t0.hour
+        tr.stats.sac.nzmin = t0.minute
+        tr.stats.sac.nzsec = t0.second
+        tr.stats.sac.nzmsec = t0.microsecond / 1e3
+    return st
 
 
 class Cut_Templates(Dataset):
@@ -75,7 +85,7 @@ class Cut_Templates(Dataset):
         # time shift & prep
         start_time = tp - win_len[0]
         end_time = tp + win_len[1]
-        st = sac.obspy_slice(stream, start_time, end_time)
+        st = obspy_slice(stream, start_time, end_time)
         if 0 in st.max() or len(st)!=3: continue
         st = st.detrend('demean')  # note: no detrend here
         # write & record out_paths
