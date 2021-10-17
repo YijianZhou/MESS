@@ -43,6 +43,7 @@ def get_sta_date(event_list):
     return sta_date_dict
 
 
+# slice sac file with obspy
 def obspy_slice(stream, t0, t1):
     st = stream.slice(t0, t1)
     for tr in st:
