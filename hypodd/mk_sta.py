@@ -9,9 +9,8 @@ fout = open('input/station.dat', 'w')
 
 f=open(cfg.fsta); lines=f.readlines(); f.close()
 for line in lines:
-    net_sta, lat, lon, ele = line.split(',')[0:4]
-    net, sta = net_sta.split('.')
-    lon = float(lon)
-    lat = float(lat)
+    codes = line.split(',')
+    net, sta = codes[0].split('.')
+    lat, lon = [float(code) for code in codes[1:3]]
     fout.write('{} {} {}\n'.format(sta, lat, lon))
 fout.close()
