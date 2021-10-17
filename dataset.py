@@ -70,7 +70,7 @@ def read_temp(temp_pha, temp_root):
     t=time.time()
     todel = []
     temp_dataset = Templates(temp_list, temp_root)
-    temp_loader = DataLoader(temp_dataset, num_workers=num_workers, batch_size=None)
+    temp_loader = DataLoader(temp_dataset, num_workers=num_workers, batch_size=None, pin_memory=True)
     for i, [temp_name, temp_loc, temp_pick_dict] in enumerate(temp_loader):
         if len(temp_pick_dict)<min_sta: todel.append(i)
         temp_list[i] = [temp_name, temp_loc, temp_pick_dict]
