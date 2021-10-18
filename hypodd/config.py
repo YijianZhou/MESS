@@ -8,6 +8,7 @@ class Config(object):
   def __init__(self):
 
     self.hypo_root = '/home/zhouyj/bin'
+    self.ctlg_code = 'eg_mess_cc'
     # 1. mk_sta
     self.fsta = 'input/example_pal.sta'
     # 2. mk_dt
@@ -28,5 +29,4 @@ class Config(object):
     self.lon_range = [-117.85,-117.25]
     self.xy_pad = [0.046,0.037]    # degree
     self.num_grids = [1,1]    # x,y (lon, lat)
-    self.ctlg_code = 'eg_mess_cc'
     self.keep_grids = False
