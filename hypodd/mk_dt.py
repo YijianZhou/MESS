@@ -163,8 +163,8 @@ def select_dt():
     for [evid_key, lines] in dt_list:
         if evid_key not in dt_dict: dt_dict[evid_key] = lines
         else: 
-           if len(dt_dict[evid_key])>len(lines): continue
-           else: dt_dict[evid_key] = lines
+            if len(dt_dict[evid_key])>len(lines): continue
+            else: dt_dict[evid_key] = lines
     # write dt.cc
     fout = open('input/dt.cc','w')
     for lines in dt_dict.values():
