@@ -92,6 +92,7 @@ class Data(Dataset):
     st_paths = self.data_dict[net_sta]
     gain = float(self.sta_dict[net_sta]['gain'])
     stream = read_stream(st_paths, gain)
+    stream = preprocess(stream)
     if len(stream)!=3: return net_sta, []
     start_time = stream[0].stats.starttime
     end_time = stream[0].stats.endtime
@@ -212,10 +213,10 @@ def read_stream(st_paths, gain=None):
         st += read(st_paths[2])
     except:
         print('bad data'); return []
-    if not gain: return preprocess(st)
+    if not gain: return st
     # remove gain
     for i in range(3): st[i].data /= gain
-    return preprocess(st)
+    return st
 
 
 def trim_stream(stream, start_time, end_time):
