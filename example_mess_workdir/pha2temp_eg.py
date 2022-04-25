@@ -51,5 +51,4 @@ for line in lines:
         if is_temp: fout.write('{}_{},{},{},{},{},{}\n'.format(evid, event_name, ot, lat, lon, dep, mag))
     else:
         if is_temp: fout.write(line)
-
 fout.close()
