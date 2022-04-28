@@ -90,7 +90,7 @@ class Data(Dataset):
     # read stream
     net_sta = self.sta_list[index]
     st_paths = self.data_dict[net_sta]
-    gain = float(self.sta_dict[net_sta]['gain'])
+    gain = self.sta_dict[net_sta][3]
     stream = read_stream(st_paths, gain)
     stream = preprocess(stream)
     if len(stream)!=3: return net_sta, []
@@ -215,7 +215,20 @@ def read_stream(st_paths, gain=None):
         print('bad data'); return []
     if not gain: return st
     # remove gain
-    for i in range(3): st[i].data /= gain
+    start_time = max([tr.stats.starttime for tr in st])
+    end_time = min([tr.stats.endtime for tr in st])
+    st_time = start_time + (end_time-start_time)/2
+    # if format 1: same gain for 3-chn & time invariant
+    if type(gain)==float:
+        for ii in range(3): st[ii].data = st[ii].data / gain
+    # if format 2: different gain for 3-chn & time invariant
+    elif type(gain[0])==float:
+        for ii in range(3): st[ii].data = st[ii].data / gain[ii]
+    # format 3: different gain for 3-chn & time variant
+    elif type(gain[0])==list:
+        for [ge,gn,gz,t0,t1] in gain:
+            if t0<st_time<t1: break
+        for ii in range(3): st[ii].data = st[ii].data / [ge,gn,gz][ii]
     return st
 
 

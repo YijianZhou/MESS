@@ -20,7 +20,6 @@ class Config(object):
     self.chn_p = [2]               # chn for P pick
     self.chn_s = [0,1]             # chn for S pick
     self.amp_win = [1,4]           # win for amp measurement
-
     # data process
     self.samp_rate = 50
     self.freq_band = [2.,40.]

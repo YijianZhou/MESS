@@ -4,7 +4,7 @@ import os, shutil
 mess_dir = '/home/zhouyj/software/MESS'
 data_dir = '/data/Example_data'
 time_range = '20190704-20190707'
-sta_file = 'input/example_pal.sta'
+sta_file = 'input/example_pal_format1.sta'
 temp_root = 'output/Example_templates'
 temp_pha = 'input/eg_pal.temp'
 out_root = 'output/eg'
