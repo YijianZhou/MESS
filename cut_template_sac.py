@@ -24,6 +24,10 @@ warnings.filterwarnings("ignore")
 cfg = config.Config()
 num_workers = cfg.num_workers
 win_len = cfg.win_len 
+win_snr = cfg.win_snr
+win_sta_lta = cfg.win_sta_lta
+win_sta_lta_npts = [int(win*cfg.samp_rate) for win in win_sta_lta]
+min_snr = cfg.min_snr
 get_data_dict = cfg.get_data_dict
 
 
@@ -37,6 +41,24 @@ def sac_cut(fpath, b, e, out_path):
     s += "w %s \n" %out_path
     s += "q \n"
     p.communicate(s.encode())
+
+def calc_sta_lta(data, win_lta_npts, win_sta_npts):
+    npts = len(data)
+    if npts < win_lta_npts + win_sta_npts:
+        print('input data too short!')
+        return np.zeros(1)
+    sta = np.zeros(npts)
+    lta = np.ones(npts)
+    data_cum = np.cumsum(data)
+    sta[:-win_sta_npts] = data_cum[win_sta_npts:] - data_cum[:-win_sta_npts]
+    sta /= win_sta_npts
+    lta[win_lta_npts:]  = data_cum[win_lta_npts:] - data_cum[:-win_lta_npts]
+    lta /= win_lta_npts
+    sta_lta = sta/lta
+    sta_lta[0:win_lta_npts] = 0.
+    sta_lta[np.isinf(sta_lta)] = 0.
+    sta_lta[np.isnan(sta_lta)] = 0.
+    return sta_lta
 
 
 class Cut_Templates(Dataset):
@@ -76,6 +98,11 @@ class Cut_Templates(Dataset):
         if len(st)!=3: 
             for out_path in out_paths: os.unlink(out_path)
             continue
+        # select with P SNR
+        if min_snr:
+            data_p = st.slice(tp-win_sta_lta[0]-win_snr[0], tp+win_sta_lta[1]+win_snr[1])[2].data
+            snr_p = calc_sta_lta(data_p**2, win_sta_lta_npts[0], win_sta_lta_npts[1])
+            if np.amax(snr_p)<min_snr: continue
         # write header & record out_paths
         t0 = win_len[0]
         t1 = ts - tp + win_len[0]

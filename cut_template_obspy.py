@@ -22,6 +22,10 @@ warnings.filterwarnings("ignore")
 cfg = config.Config()
 num_workers = cfg.num_workers
 win_len = cfg.win_len 
+win_snr = cfg.win_snr
+win_sta_lta = cfg.win_sta_lta
+win_sta_lta_npts = [int(win*cfg.samp_rate) for win in win_sta_lta]
+min_snr = cfg.min_snr
 get_data_dict = cfg.get_data_dict
 
 
@@ -42,7 +46,6 @@ def get_sta_date(event_list):
             else: sta_date_dict[sta_date].append([event_dir, tp, ts])
     return sta_date_dict
 
-
 # slice sac file with obspy
 def obspy_slice(stream, t0, t1):
     st = stream.slice(t0, t1)
@@ -54,6 +57,24 @@ def obspy_slice(stream, t0, t1):
         tr.stats.sac.nzsec = t0.second
         tr.stats.sac.nzmsec = t0.microsecond / 1e3
     return st
+
+def calc_sta_lta(data, win_lta_npts, win_sta_npts):
+    npts = len(data)
+    if npts < win_lta_npts + win_sta_npts:
+        print('input data too short!')
+        return np.zeros(1)
+    sta = np.zeros(npts)
+    lta = np.ones(npts)
+    data_cum = np.cumsum(data)
+    sta[:-win_sta_npts] = data_cum[win_sta_npts:] - data_cum[:-win_sta_npts]
+    sta /= win_sta_npts
+    lta[win_lta_npts:]  = data_cum[win_lta_npts:] - data_cum[:-win_lta_npts]
+    lta /= win_lta_npts
+    sta_lta = sta/lta
+    sta_lta[0:win_lta_npts] = 0.
+    sta_lta[np.isinf(sta_lta)] = 0.
+    sta_lta[np.isnan(sta_lta)] = 0.
+    return sta_lta
 
 
 class Cut_Templates(Dataset):
@@ -89,6 +110,11 @@ class Cut_Templates(Dataset):
         st = obspy_slice(stream, start_time, end_time)
         if 0 in st.max() or len(st)!=3: continue
         st = st.detrend('demean')  # note: no detrend here
+        # select with P SNR
+        if min_snr:
+            data_p = st.slice(tp-win_sta_lta[0]-win_snr[0], tp+win_sta_lta[1]+win_snr[1])[2].data
+            snr_p = calc_sta_lta(data_p**2, win_sta_lta_npts[0], win_sta_lta_npts[1])
+            if np.amax(snr_p)<min_snr: continue
         # write & record out_paths
         data_paths_i.append([])
         for tr in st:
@@ -123,7 +149,7 @@ if __name__ == '__main__':
     dataloader = DataLoader(dataset, num_workers=num_workers, batch_size=None)
     for i, data_paths_i in enumerate(dataloader): 
         data_paths += data_paths_i
-        if i%10==0: print('%s/%s sta-date pairs done/total'%(i,len(dataset)))
+        if i%10==0: print('%s/%s sta-date pairs done/total'%(i+1,len(dataset)))
     fout_data_paths = os.path.join(args.out_root,'data_paths.npy')
     np.save(fout_data_paths, data_paths)
 

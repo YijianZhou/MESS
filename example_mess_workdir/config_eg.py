@@ -5,8 +5,12 @@ import data_pipeline as dp
 class Config(object):
   def __init__(self):
 
-    # MFT params
+    # template cut
     self.win_len = [10,20]         # cut template length
+    self.win_snr = [1,1]           # sec pre-post P for SNR calc 
+    self.win_sta_lta = [8,1]       # STA/LTA measurement for SNR
+    self.min_snr = 12              # defined by energy
+    # MFT params
     self.min_sta = 4               # min sta num for template event
     self.max_sta = 15              # max sta num for template event
     self.temp_win_det = [1.,9.]    # temp win for detection, pre & post P

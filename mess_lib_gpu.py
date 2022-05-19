@@ -43,14 +43,20 @@ def mess_det(temp_pick_dict, data_dict):
         data_list.append([data, norm_data])
         temp_list.append([temp[0], norm_temp[0]])
         dt_ot_list.append(dt_list[0])
+    dt_ot_list = np.array(dt_ot_list)
     num_sta = len(data_list)
     if num_sta<min_sta: return []
-    cc_holder = np.zeros([num_sta, int(86400*samp_rate)])
     # 1. match
     cc_mat = match_filter(data_list, temp_list)
+    cc_cond = np.amax(cc_mat, axis=1) > trig_thres
+    cc_mat = cc_mat[cc_cond]
+    dt_ot_list = dt_ot_list[cc_cond]
+    num_sta = len(cc_mat)
+    if num_sta<min_sta: return []
     # 2. expand
     cc_expand = [expand_cc(cc_i) for cc_i in cc_mat]
     # 3. shift
+    cc_holder = np.zeros([num_sta, int(86400*samp_rate)])
     cc_shift = shift_ot(cc_expand, dt_ot_list, cc_holder)
     # 4. stack & detect
     cc_stack = np.mean(cc_shift, axis=0)
