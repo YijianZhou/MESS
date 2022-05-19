@@ -8,7 +8,6 @@ import config
 import warnings
 warnings.filterwarnings("ignore")
 
-
 # assoc det
 def assoc_det(time_range, start_evid):
     print('associating %s'%time_range)
@@ -32,16 +31,20 @@ def assoc_det(time_range, start_evid):
         cc = dets_reloc['cc']
         # whether self-det
         is_self = False
+        self_dets = []
         for j,det in enumerate(dets_reloc):
             temp_ot = temp_loc_dict[det['temp_id']][0]
             if abs(temp_ot-det['ot'])>ot_dev: continue
-            det_i = det
-            det_id = det['temp_id']
+            self_dets.append((j,len(det['picks'])))
+        self_dets = np.array(self_dets, dtype=[('idx','int'),('nsta','O')])
+        if len(self_dets)>0:
             is_self = True
-            dets_reloc = np.delete(dets_reloc, j, axis=0)
-            cc = np.delete(cc, j, axis=0)
-            break
-        if not is_self: det_i = dets_reloc[np.argmax(cc)]
+            idx = self_dets[np.argmax(self_dets['nsta'])]['idx']
+            det_i = dets_reloc[idx]
+            det_id = det_i['temp_id']
+            dets_reloc = np.delete(dets_reloc, self_dets['idx'], axis=0)
+            cc = np.delete(cc, self_dets['idx'], axis=0)
+        else: det_i = dets_reloc[np.argmax(cc)]
         # sort by cc & restrict number of neighbor
         if len(cc)>0:
             cc_min = np.sort(cc)[::-1][0:nbr_thres[1]][-1]
@@ -66,7 +69,6 @@ def assoc_det(time_range, start_evid):
     out_dt.close()
     out_event.close()
 
-
 # read temp pha --> temp_loc_dict
 def read_temp_pha(temp_pha):
     f=open(temp_pha); lines=f.readlines(); f.close()
@@ -79,7 +81,6 @@ def read_temp_pha(temp_pha):
         temp_id = codes[-1][:-1]
         temp_loc_dict[temp_id] = [ot, lat, lon, dep]
     return temp_loc_dict
-
 
 # read det pha (MESS output) --> det_list
 def read_det_pha(det_pha, start_time, end_time):
@@ -101,7 +102,6 @@ def read_det_pha(det_pha, start_time, end_time):
             det_list[-1][-1][net_sta] = [dt_p, dt_s, s_amp, cc_p, cc_s]
     return np.array(det_list, dtype=dtype)
 
-
 # write dt.cc
 def write_dt(det, evid, ot_corr, fout):
     fout.write('# {:9} {:9} 0.0\n'.format(evid, det['temp_id']))
@@ -114,7 +114,6 @@ def write_dt(det, evid, ot_corr, fout):
         if abs(dt_s)<=dt_thres[1] and cc_s>=cc_thres[1]: 
             fout.write('{:7} {:8.5f} {:.4f} S\n'.format(sta, dt_s, cc_s**0.5))
 
-
 # write event.dat
 def write_event(event_loc, evid, fout):
     ot, lat, lon, dep, mag = event_loc
@@ -124,7 +123,6 @@ def write_event(event_loc, evid, fout):
     loc = '{:7.4f}   {:8.4f}   {:8.3f}  {:4.1f}'.format(lat, lon, dep, mag)
     err_rms = '   0.00    0.00   0.0'
     fout.write('{}  {}   {} {} {:>10}\n'.format(date, time, loc, err_rms, evid))
-
 
 def calc_mag(event):
     evt_lat, evt_lon, evt_dep = event['loc']
@@ -145,7 +143,6 @@ def calc_mag(event):
     mag = np.delete(mag, np.argmax(mag_dev))
     return round(np.median(mag),2)
 
-
 def select_dt():
     print('select unique dt.cc pairs')
     # read dt.cc
@@ -163,8 +160,8 @@ def select_dt():
     for [evid_key, lines] in dt_list:
         if evid_key not in dt_dict: dt_dict[evid_key] = lines
         else: 
-            if len(dt_dict[evid_key])>len(lines): continue
-            else: dt_dict[evid_key] = lines
+           if len(dt_dict[evid_key])>len(lines): continue
+           else: dt_dict[evid_key] = lines
     # write dt.cc
     fout = open('input/dt.cc','w')
     for lines in dt_dict.values():
