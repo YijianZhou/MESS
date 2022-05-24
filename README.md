@@ -1,7 +1,7 @@
 # MESS
 MESS is a matched filter earthquake detector  <br>
   
-This method includes four steps:  <br>
+This method includes four steps:  
 1. **M**atch: calculate CC trace on every station (matched filter)
 2. **E**xpand: expand peak values on CC traces
 3. **S**hift: time shift to origin times for all CC traces  
