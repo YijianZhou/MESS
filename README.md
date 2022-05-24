@@ -1,14 +1,14 @@
 # MESS
 MESS is a matched filter earthquake detector  <br>
   
-- Workflow
+- **Workflow**
 1. **M**atch: calculate CC trace on every station (matched filter)
 2. **E**xpand: expand peak values on CC traces
 3. **S**hift: time shift to origin times for all CC traces  
 4. **S**tack: stack CC traces of different stations & detect events on the stacked trace  
 5. *dt_p* and *dt_s* are picked by cross-correlation  
 
-- Usage (see __example_mess_workdir__):
+- **Usage** (see __example_mess_workdir__):
 1. Prepare template phase file & Cut template waveform 
 2. Run MESS 
 
