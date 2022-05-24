@@ -8,7 +8,7 @@ MESS is a matched filter earthquake detector  <br>
 4. **S**tack: stack CC traces of different stations & detect events on the stacked trace  
 5. *dt_p* and *dt_s* are picked by cross-correlation  
 
-- **Usage** (see __example_mess_workdir__):
+- **Usage** (see *example_mess_workdir*):
 1. Prepare template phase file & Cut template waveform 
 2. Run MESS 
 
