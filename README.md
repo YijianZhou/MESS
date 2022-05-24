@@ -9,7 +9,7 @@ MESS is a matched filter earthquake detector  <br>
 5. *dt_p* and *dt_s* are picked by cross-correlation  
 
 - **Usage** (see *example_mess_workdir*)
-1. Prepare template phase file & cut template waveform 
+1. Prepare template phase file (e.g. run [PAL](https://github.com/YijianZhou/PAL)) & cut template waveform 
 2. Run MESS 
 
 ## Installation <br>
