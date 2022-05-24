@@ -7,6 +7,7 @@ MESS is a matched filter earthquake detector  <br>
 3. **S**hift: time shift to origin times for all CC traces  
 4. **S**tack: stack CC traces of different stations & detect events on the stacked trace  
 5. *dt_p* and *dt_s* are picked by cross-correlation  
+![Zhou et al., (2021)](./doc/PALM_workflow.jpg)
 
 - **Usage** (see *example_mess_workdir*)
 1. Prepare template phase file (e.g. run [PAL](https://github.com/YijianZhou/PAL)) & cut template waveform 
