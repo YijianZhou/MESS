@@ -136,7 +136,7 @@ def match_filter(data_list, temp_list):
         cc_i += calc_cc(data[2], temp[2], norm_data[2], norm_temp[2])
         cc_i /= 3
         cc_mat.append(cc_i)
-    return cc_mat
+    return np.array(cc_mat)
 
 
 # 2. expand peak value in CC trace

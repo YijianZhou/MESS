@@ -130,13 +130,14 @@ def calc_mag(event):
     mag = -np.ones(num_sta)
     for i,[net_sta, [_,_,s_amp,_,_]] in enumerate(event['picks'].items()):
         # get sta_loc
-        sta_loc = sta_dict[net_sta]
+        sta_lat, sta_lon, sta_ele = sta_dict[net_sta][0:3]
         amp = s_amp * 1e6 # m to miu m
         # calc epi dist
-        dist_lat = 111*(sta_loc['sta_lat'] - evt_lat)
-        dist_lon = 111*(sta_loc['sta_lon'] - evt_lon) \
-                   * np.cos(sta_loc['sta_lat'] * np.pi/180)
-        dist = np.sqrt(dist_lon**2 + dist_lat**2 + evt_dep**2)
+        cos_lat = np.cos(sta_lat * np.pi/180)
+        dist_lat = 111*(sta_lat - evt_lat)
+        dist_lon = 111*(sta_lon - evt_lon) * cos_lat
+        dist_dep = evt_dep + sta_ele/1e3
+        dist = np.sqrt(dist_lon**2 + dist_lat**2 + dist_dep**2)
         mag[i] = np.log10(amp) + np.log10(dist) + 1
     # remove one outlier
     mag_dev = abs(mag - np.median(mag))
