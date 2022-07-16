@@ -1,4 +1,4 @@
-""" Cut template waveform with Pytorch (preprocess in cut)
+""" Cut template waveform for intense sequence
   Inputs
     data_dir: dir of continuous data
     temp_pha: template phase file
@@ -138,7 +138,6 @@ if __name__ == '__main__':
     parser.add_argument('--out_root', type=str,
                         default='output/example_templates')
     args = parser.parse_args()
-
     # read fpha
     temp_list = read_ftemp(args.temp_pha)
     sta_date_dict = get_sta_date(temp_list)

@@ -1,4 +1,4 @@
-""" Cut template waveform with SAC
+""" Cut template waveform for long-term data
   Inputs
     data_dir: dir of continuous data
     temp_pha: template phase file
@@ -126,7 +126,6 @@ if __name__ == '__main__':
     parser.add_argument('--out_root', type=str,
                         default='output/example_templates')
     args = parser.parse_args()
-
     # i/o files
     if not os.path.exists(args.out_root): os.makedirs(args.out_root)
     temp_list = read_ftemp(args.temp_pha)
