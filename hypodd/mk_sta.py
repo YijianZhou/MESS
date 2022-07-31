@@ -5,7 +5,7 @@ import config
 
 # i/o paths
 cfg = config.Config()
-fout = open('input/station.dat', 'w')
+fout = open('input/station.dat','w')
 
 done_list = []
 f=open(cfg.fsta); lines=f.readlines(); f.close()
