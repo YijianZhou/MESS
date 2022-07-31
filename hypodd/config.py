@@ -10,7 +10,7 @@ class Config(object):
     self.hypo_root = '/home/zhouyj/bin'
     self.ctlg_code = 'eg_mess_cc'
     # 1. mk_sta
-    self.fsta = 'input/example_pal.sta'
+    self.fsta = 'input/example_pal_format1.sta'
     # 2. mk_dt
     self.temp_pha = 'input/eg_pal_ct_full.pha'    # reloc template phase file
     self.det_pha = 'input/eg_mess.pha'    # mess output phase file
