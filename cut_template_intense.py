@@ -50,6 +50,7 @@ def get_sta_date(event_list):
 def obspy_slice(stream, t0, t1):
     st = stream.slice(t0, t1)
     for tr in st:
+        if not 'sac' in tr.stats: continue
         tr.stats.sac.nzyear = t0.year
         tr.stats.sac.nzjday = t0.julday
         tr.stats.sac.nzhour = t0.hour
