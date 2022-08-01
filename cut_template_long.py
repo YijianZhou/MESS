@@ -15,8 +15,6 @@ from torch.utils.data import Dataset, DataLoader
 from obspy import read, UTCDateTime
 import config
 from dataset_gpu import read_ftemp, preprocess
-import subprocess
-os.putenv("SAC_DISPLAY_COPYRIGHT", '0')
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -30,17 +28,6 @@ win_sta_lta_npts = [int(win*cfg.samp_rate) for win in win_sta_lta]
 min_snr = cfg.min_snr
 get_data_dict = cfg.get_data_dict
 
-
-def sac_cut(fpath, b, e, out_path):
-    p = subprocess.Popen(['sac'], stdin=subprocess.PIPE)
-    s = "wild echo off \n"
-    s += "cuterr fillz \n"
-    s += "cut %s %s \n" %(b, e)
-    s += "r %s \n" %fpath
-    s += "ch allt (0-&1,b&) iztype IB \n"
-    s += "w %s \n" %out_path
-    s += "q \n"
-    p.communicate(s.encode())
 
 def calc_sta_lta(data, win_lta_npts, win_sta_npts):
     npts = len(data)
@@ -59,6 +46,18 @@ def calc_sta_lta(data, win_lta_npts, win_sta_npts):
     sta_lta[np.isinf(sta_lta)] = 0.
     sta_lta[np.isnan(sta_lta)] = 0.
     return sta_lta
+
+def sac_ch_time(st):
+    for tr in st:
+        if not 'sac' in tr.stats: continue
+        t0 = tr.stats.starttime
+        tr.stats.sac.nzyear = t0.year
+        tr.stats.sac.nzjday = t0.julday
+        tr.stats.sac.nzhour = t0.hour
+        tr.stats.sac.nzmin = t0.minute
+        tr.stats.sac.nzsec = t0.second
+        tr.stats.sac.nzmsec = t0.microsecond / 1e3
+    return st
 
 
 class Cut_Templates(Dataset):
@@ -81,34 +80,28 @@ class Cut_Templates(Dataset):
     if not os.path.exists(event_dir): os.makedirs(event_dir)
     # cut event
     for net_sta, [tp, ts] in pick_dict.items():
+        if net_sta not in data_dict: continue
         data_paths = data_dict[net_sta]
         chn_codes = [data_path.split('.')[-2] for data_path in data_paths]
         out_paths = [os.path.join(event_dir,'%s.%s'%(net_sta,chn)) for chn in chn_codes]
-        # cut event
-        b_list = [tp - read(data_path, headonly=True)[0].stats.starttime - win_len[0] \
-            for data_path in data_paths]
-        sac_cut(data_paths[0], b_list[0], b_list[0]+sum(win_len), out_paths[0])
-        sac_cut(data_paths[1], b_list[1], b_list[1]+sum(win_len), out_paths[1])
-        sac_cut(data_paths[2], b_list[2], b_list[2]+sum(win_len), out_paths[2])
-        # preprocess
-        st  = read(out_paths[0])
-        st += read(out_paths[1])
-        st += read(out_paths[2])
+        st  = read(data_paths[0], starttime=tp-win_len[0], endtime=tp+win_len[1])
+        st += read(data_paths[0], starttime=tp-win_len[0], endtime=tp+win_len[1])
+        st += read(data_paths[0], starttime=tp-win_len[0], endtime=tp+win_len[1])
+        if len(st)!=3: continue
         st = preprocess(st)
-        if len(st)!=3: 
-            for out_path in out_paths: os.unlink(out_path)
-            continue
+        if len(st)!=3: continue
+        st = sac_ch_time(st)
         # select with P SNR
         if min_snr:
             data_p = st.slice(tp-win_sta_lta[0]-win_snr[0], tp+win_sta_lta[1]+win_snr[1])[2].data
             snr_p = calc_sta_lta(data_p**2, win_sta_lta_npts[0], win_sta_lta_npts[1])
             if np.amax(snr_p)<min_snr: continue
-        # write header & record out_paths
-        t0 = win_len[0]
-        t1 = ts - tp + win_len[0]
-        for ii in range(3): 
-            st[ii].stats.sac.t0, st[ii].stats.sac.t1 = t0, t1
+        # change SAC time header
+        for ii in range(3):
             st[ii].write(out_paths[ii], format='sac')
+            tr = read(out_paths[ii])[0]
+            tr.stats.sac.t0, tr.stats.sac.t1 = win_len[0], ts-tp+win_len[0]
+            tr.write(out_paths[ii], format='sac')
         data_paths_i.append(out_paths)
     return data_paths_i
 
