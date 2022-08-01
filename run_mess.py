@@ -44,7 +44,6 @@ if __name__ == '__main__':
   sta_dict = cfg.get_sta_dict(args.sta_file)
   # read templates
   temp_list = read_temp(args.temp_pha, args.temp_root)
-
   # get time range
   start_date, end_date = [UTCDateTime(date) for date in args.time_range.split('-')]
   print('run MESS')

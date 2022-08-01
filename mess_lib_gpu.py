@@ -122,7 +122,6 @@ def calc_cc_gpu(data_mat, temp_mat, norm_data_mat, norm_temp_vec):
     cc_mat /= norm_temp_vec.view([num_sta,1])
     return cc_mat
 
-
 def calc_cc(data, temp, norm_data=None, norm_temp=None):
     ntemp, ndata = len(temp), len(data)
     if ntemp>ndata: return [0]
@@ -137,7 +136,6 @@ def calc_cc(data, temp, norm_data=None, norm_temp=None):
     cc[np.isnan(cc)] = 0.
     return cc
 
-
 # 1. matched filter (calc cc traces)
 def match_filter(data_list, temp_list):
     for i in range(3):
@@ -151,7 +149,6 @@ def match_filter(data_list, temp_list):
     cc_mat[np.isinf(cc_mat)] = 0.
     cc_mat[np.isnan(cc_mat)] = 0.
     return cc_mat
-
 
 # 2. expand peak value in CC trace
 def expand_cc(cc):
@@ -169,14 +166,12 @@ def expand_cc(cc):
         slide_idx = trig_idx + expand_len + det_gap
     return cc
 
-
 # 3. shift time shift to ot
 def shift_ot(cc_list, dt_ot_list, cc_holder):
     for i,dt_ot in enumerate(dt_ot_list):
         cc_i = cc_list[i][max(0,-dt_ot) : cc_holder.shape[1] - dt_ot]
         cc_holder[i][max(0,dt_ot) : max(0,dt_ot) + len(cc_i)] = cc_i
     return cc_holder
-
 
 # 4. detect on stacked cc trace
 def det_cc_stack(cc_stack):
@@ -194,7 +189,6 @@ def det_cc_stack(cc_stack):
         slide_idx = det_idx + expand_len + det_gap
     return dets
 
-
 # get S amplitide
 def get_s_amp(velo):
     # remove mean
@@ -204,11 +198,9 @@ def get_s_amp(velo):
     disp /= samp_rate
     return np.amax(np.sum(disp**2, axis=0))**0.5
 
-
 # write detection to catalog
 def write_ctlg(det_ot, det_cc, temp_name, temp_loc, out_ctlg):
     out_ctlg.write('{0},{1},{2[1]},{2[2]},{2[3]},{3:.3f}\n'.format(temp_name, det_ot, temp_loc, det_cc))
-
 
 # write phase picks to phase file
 def write_pha(det_ot, det_cc, temp_name, temp_loc, picks, out_pha):

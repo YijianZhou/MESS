@@ -8,7 +8,7 @@ from obspy import read, UTCDateTime
 import numpy as np
 import config
 
-# data config
+# import config
 cfg = config.Config()
 get_data_dict = cfg.get_data_dict
 num_workers = cfg.num_workers
@@ -153,9 +153,6 @@ class Templates(Dataset):
     return len(self.temp_list)
 
 
-""" File reading
-"""
-
 # read template phase file
 def read_ftemp(ftemp):
     f=open(ftemp); lines=f.readlines(); f.close()
@@ -173,10 +170,6 @@ def read_ftemp(ftemp):
             tp, ts = [UTCDateTime(code) for code in codes[1:3]]
             temp_list[-1][-1][net_sta] = [tp, ts]
     return temp_list
-
-
-""" Signal processing
-"""
 
 def preprocess(stream):
     # time alignment
@@ -213,7 +206,6 @@ def preprocess(stream):
     else:
         print('filter type not supported!'); return []
 
-
 def read_stream(st_paths, gain=None):
     # read data
     try:
@@ -240,13 +232,8 @@ def read_stream(st_paths, gain=None):
         for ii in range(3): st[ii].data = st[ii].data / [ge,gn,gz][ii]
     return st
 
-
 def trim_stream(stream, start_time, end_time):
     return stream.copy().trim(start_time, end_time, pad=True, fill_value=0.)
-
-
-""" Data format transform
-"""
 
 def cpu2cuda(data):
     return data.float().cuda(non_blocking=True)
