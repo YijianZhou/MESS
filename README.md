@@ -1,7 +1,7 @@
 # MESS
 MESS is a matched filter earthquake detector  <br>
   
-- **MESS Workflow**
+- **MESS Workflow**  
 1. **M**atch: calculate CC trace on every station (matched filter)
 2. **E**xpand: expand peak values on CC traces
 3. **S**hift: time shift to origin times for all CC traces  
@@ -9,9 +9,12 @@ MESS is a matched filter earthquake detector  <br>
 5. *dt_p* and *dt_s* are picked by cross-correlation  
 ![Zhou et al., (2021)](./doc/PALM_workflow.jpg)
 
-- **Usage** (see *example_mess_workdir*)
-1. Prepare template phase file (e.g. run [PAL](https://github.com/YijianZhou/PAL)) & cut template waveform 
-2. Run MESS 
+- **Usage** (see *example_mess_workdir*)  
+1. Prepare template phase file (e.g. run [PAL](https://github.com/YijianZhou/PAL)) & cut template waveform  
+2. Run MESS  
+
+- **Tutorials**  
+2021/10 Online training in Chinese: vedio recording on [KouShare](https://www.koushare.com/lives/room/549779)  
 
 ## Installation <br>
 MESS is a set of codes. All you need is to setup proper Python environment. This can be accomplished easily by installing [Anaconda](https://www.anaconda.com/products/individual#Downloads), [Obspy](https://github.com/obspy/obspy/wiki/Installation-via-Anaconda), and [Pytorch](https://pytorch.org/) sequentially. Or you can use the *env/mess.yml* file with *conda*. 
