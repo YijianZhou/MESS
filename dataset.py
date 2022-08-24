@@ -1,4 +1,4 @@
-""" Data i/o interface for MESS (GPU ver)
+""" Data i/o interface for MESS (CPU ver)
 """
 import os, glob, time
 import torch
