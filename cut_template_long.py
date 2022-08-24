@@ -85,8 +85,8 @@ class Cut_Templates(Dataset):
         chn_codes = [data_path.split('.')[-2] for data_path in data_paths]
         out_paths = [os.path.join(event_dir,'%s.%s'%(net_sta,chn)) for chn in chn_codes]
         st  = read(data_paths[0], starttime=tp-win_len[0], endtime=tp+win_len[1])
-        st += read(data_paths[0], starttime=tp-win_len[0], endtime=tp+win_len[1])
-        st += read(data_paths[0], starttime=tp-win_len[0], endtime=tp+win_len[1])
+        st += read(data_paths[1], starttime=tp-win_len[0], endtime=tp+win_len[1])
+        st += read(data_paths[2], starttime=tp-win_len[0], endtime=tp+win_len[1])
         if len(st)!=3: continue
         st = preprocess(st)
         if len(st)!=3: continue
