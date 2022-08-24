@@ -48,7 +48,7 @@ if __name__ == '__main__':
   temp_list = read_temp(args.temp_pha, args.temp_root)
   # get time range
   start_date, end_date = [UTCDateTime(date) for date in args.time_range.split('-')]
-  print('run MESS (gpu version)')
+  print('run MESS (GPU version)')
   print('time range: {} to {}'.format(start_date.date, end_date.date))
   # for all days
   num_day = (end_date.date - start_date.date).days
