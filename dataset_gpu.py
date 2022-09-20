@@ -92,6 +92,7 @@ class Data(Dataset):
     st_paths = self.data_dict[net_sta]
     gain = self.sta_dict[net_sta][3]
     stream = read_stream(st_paths, gain)
+    if len(stream)!=3: return net_sta, []
     stream = preprocess(stream)
     if len(stream)!=3: return net_sta, []
     start_time = stream[0].stats.starttime
