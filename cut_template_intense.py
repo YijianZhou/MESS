@@ -109,7 +109,7 @@ class Cut_Templates(Dataset):
         start_time = tp - win_len[0]
         end_time = tp + win_len[1]
         st = obspy_slice(stream, start_time, end_time)
-        if 0 in st.max() or len(st)!=3: continue
+        if len(st)!=3: continue
         st = st.detrend('demean')  # note: no detrend here
         # select with P SNR
         if min_snr:
