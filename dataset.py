@@ -102,7 +102,7 @@ class Data(Dataset):
     # calc norm data (for calc_cc)
     data_cum = [np.cumsum(di**2) for di in data_np]
     norm_data = np.array([np.sqrt(di[temp_win_npts[0]:] - di[:-temp_win_npts[0]]) for di in data_cum])
-    return net_sta, [data_np, norm_data]
+    return net_sta, [data_np.astype(np.float32), norm_data.astype(np.float32)]
 
   def __len__(self):
     return len(self.sta_list)
