@@ -137,7 +137,7 @@ class Templates(Dataset):
         temp_det = trim_stream(st, tp-temp_win_det[0], tp+temp_win_det[1])
         temp_p = trim_stream(st, tp-temp_win_p[0], tp+temp_win_p[1])
         temp_s = trim_stream(st, ts-temp_win_s[0], ts+temp_win_s[1])
-        temp = [st2np(st_i) for st_i in [temp_det, temp_p, temp_s]]
+        temp = [st2np(st_i).astype(np.float32) for st_i in [temp_det, temp_p, temp_s]]
         temp = [temp[i][:,0:temp_win_npts[i]] for i in range(3)]
         # calc norm
         norm_det = np.array([sum(tr**2)**0.5 for tr in temp[0]])
