@@ -103,7 +103,7 @@ class Data(Dataset):
     # calc norm data (for calc_cc)
     data_cum = [np.cumsum(di**2) for di in data_np]
     norm_data = np.array([np.sqrt(di[temp_win_npts[0]:] - di[:-temp_win_npts[0]]) for di in data_cum])
-    return net_sta, [data_np, norm_data]
+    return net_sta, [data_np.astype(np.float32), norm_data.astype(np.float32)]
 
   def __len__(self):
     return len(self.sta_list)
@@ -138,7 +138,7 @@ class Templates(Dataset):
         temp_det = trim_stream(st, tp-temp_win_det[0], tp+temp_win_det[1])
         temp_p = trim_stream(st, tp-temp_win_p[0], tp+temp_win_p[1])
         temp_s = trim_stream(st, ts-temp_win_s[0], ts+temp_win_s[1])
-        temp = [st2np(st_i) for st_i in [temp_det, temp_p, temp_s]]
+        temp = [st2np(st_i).astype(np.float32) for st_i in [temp_det, temp_p, temp_s]]
         temp = [temp[i][:,0:temp_win_npts[i]] for i in range(3)]
         # calc norm
         norm_det = np.array([sum(tr**2)**0.5 for tr in temp[0]])
