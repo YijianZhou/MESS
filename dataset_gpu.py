@@ -178,6 +178,7 @@ def preprocess(stream):
     end_time = min([trace.stats.endtime for trace in stream])
     if start_time>end_time: print('bad data!'); return []
     st = stream.slice(start_time, end_time)
+    st = st.detrend('demean').detrend('linear').taper(max_percentage=0.05, max_length=5.)
     # resample data
     org_rate = st[0].stats.sampling_rate
     if org_rate!=samp_rate: st.resample(samp_rate)
@@ -185,7 +186,6 @@ def preprocess(stream):
         st[ii].data[np.isnan(st[ii].data)] = 0
         st[ii].data[np.isinf(st[ii].data)] = 0
     # filter
-    st = st.detrend('demean').detrend('linear').taper(max_percentage=0.05, max_length=5.)
     freq_min, freq_max = freq_band
     if freq_min and freq_max:
         return st.filter('bandpass', freqmin=freq_min, freqmax=freq_max)
