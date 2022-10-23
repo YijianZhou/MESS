@@ -59,6 +59,27 @@ def sac_ch_time(st):
         tr.stats.sac.nzmsec = t0.microsecond / 1e3
     return st
 
+def cut_event_window(stream_paths, tp, ts, out_paths):
+    t0 = tp - win_len[0] - sum(win_len)/2
+    t1 = t0 + sum(win_len)*2
+    st  = read(stream_paths[0], starttime=t0, endtime=t1)
+    st += read(stream_paths[1], starttime=t0, endtime=t1)
+    st += read(stream_paths[2], starttime=t0, endtime=t1)
+    if len(st)!=3: return False
+    st = sac_ch_time(preprocess(st).slice(tp-win_len[0], tp+win_len[1]))
+    if len(st)!=3: return False
+    # select with P SNR
+    if min_snr:
+        data_p = st.slice(tp-win_sta_lta[0]-win_snr[0], tp+win_sta_lta[1]+win_snr[1])[2].data
+        snr_p = calc_sta_lta(data_p**2, win_sta_lta_npts[0], win_sta_lta_npts[1])
+        if np.amax(snr_p)<min_snr: return False
+    for ii, tr in enumerate(st):
+        tr.write(out_paths[ii], format='sac')
+        tr = read(out_paths[ii])[0]
+        tr.stats.sac.t0, tr.stats.sac.t1 = win_len[0], win_len[0]+(ts-tp)
+        tr.write(out_paths[ii], format='sac')
+    return True
+
 
 class Cut_Templates(Dataset):
   """ Dataset for cutting templates
@@ -82,26 +103,9 @@ class Cut_Templates(Dataset):
     for net_sta, [tp, ts] in pick_dict.items():
         if net_sta not in data_dict: continue
         data_paths = data_dict[net_sta]
-        chn_codes = [data_path.split('.')[-2] for data_path in data_paths]
-        out_paths = [os.path.join(event_dir,'%s.%s'%(net_sta,chn)) for chn in chn_codes]
-        st  = read(data_paths[0], starttime=tp-win_len[0], endtime=tp+win_len[1])
-        st += read(data_paths[1], starttime=tp-win_len[0], endtime=tp+win_len[1])
-        st += read(data_paths[2], starttime=tp-win_len[0], endtime=tp+win_len[1])
-        if len(st)!=3: continue
-        st = preprocess(st)
-        if len(st)!=3: continue
-        st = sac_ch_time(st)
-        # select with P SNR
-        if min_snr:
-            data_p = st.slice(tp-win_sta_lta[0]-win_snr[0], tp+win_sta_lta[1]+win_snr[1])[2].data
-            snr_p = calc_sta_lta(data_p**2, win_sta_lta_npts[0], win_sta_lta_npts[1])
-            if np.amax(snr_p)<min_snr: continue
-        # change SAC time header
-        for ii in range(3):
-            st[ii].write(out_paths[ii], format='sac')
-            tr = read(out_paths[ii])[0]
-            tr.stats.sac.t0, tr.stats.sac.t1 = win_len[0], ts-tp+win_len[0]
-            tr.write(out_paths[ii], format='sac')
+        out_paths = [os.path.join(event_dir,'%s.%s'%(net_sta,ii)) for ii in range(3)]
+        is_cut = cut_event_window(data_paths, tp, ts, out_paths)
+        if not is_cut: continue
         data_paths_i.append(out_paths)
     return data_paths_i
 
