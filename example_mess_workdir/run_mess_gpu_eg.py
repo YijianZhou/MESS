@@ -2,7 +2,7 @@ import os, shutil
 from obspy import UTCDateTime
 
 # i/o paths
-gpu_idx = '0'
+gpu_idx = 0
 mess_dir = '/home/zhouyj/software/MESS'
 data_dir = '/data/Example_data'
 time_range = '20190704-20190707'

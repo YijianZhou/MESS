@@ -17,7 +17,7 @@ if __name__ == '__main__':
   mp.set_start_method('spawn', force=True) # 'spawn' or 'forkserver'
   # args parser
   parser = argparse.ArgumentParser()
-  parser.add_argument('--gpu_idx', type=str, default="0")
+  parser.add_argument('--gpu_idx', type=int, default=0)
   parser.add_argument('--data_dir', type=str,
                       default='/data/Example_data')
   parser.add_argument('--time_range', type=str,
@@ -33,7 +33,7 @@ if __name__ == '__main__':
   parser.add_argument('--out_pha', type=str,
                       default='output/example.pha')
   args = parser.parse_args()
-  os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_idx
+  torch.cuda.set_device(int(args.gpu_idx)) 
 
   # MESS params
   cfg = config.Config()
