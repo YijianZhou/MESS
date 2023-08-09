@@ -120,6 +120,9 @@ class Cut_Templates(Dataset):
         data_paths_i.append([])
         for tr in st:
             out_path = os.path.join(event_dir,'%s.%s'%(net_sta,tr.stats.channel))
+            if not 'sac' in tr.stats:
+                tr.write(out_path, format='sac')
+                tr = read(out_path)[0]
             tr.stats.sac.t0, tr.stats.sac.t1 = tp-start_time, ts-start_time
             tr.write(out_path, format='sac')
             data_paths_i[-1].append(out_path)
