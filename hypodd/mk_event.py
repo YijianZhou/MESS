@@ -53,5 +53,5 @@ for line in lines:
     if not ot_min<ot<ot_max: continue
     for idx in fout_idx: fouts[idx].write(line)
 
-np.save('input/evid_lists.npy', evid_lists)
+np.save('input/evid_lists.npy', np.array(evid_lists, dtype=object))
 for fout in fouts: fout.close()
