@@ -56,7 +56,7 @@ def obspy_slice(stream, t0, t1):
         tr.stats.sac.nzhour = t0.hour
         tr.stats.sac.nzmin = t0.minute
         tr.stats.sac.nzsec = t0.second
-        tr.stats.sac.nzmsec = t0.microsecond / 1e3
+        tr.stats.sac.nzmsec = int(t0.microsecond / 1e3)
     return st
 
 def calc_sta_lta(data, win_lta_npts, win_sta_npts):
