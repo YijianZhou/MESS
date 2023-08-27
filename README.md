@@ -1,13 +1,13 @@
-# MESS
-MESS is a matched filter earthquake detector  <br>
+# MESS  
+MESS is a matched filter earthquake detector  
   
 - **MESS Workflow**  
-1. **M**atch: calculate CC trace on every station (matched filter)
-2. **E**xpand: expand peak values on CC traces
+1. **M**atch: calculate CC trace on every station (matched filter)  
+2. **E**xpand: expand peak values on CC traces  
 3. **S**hift: time shift to origin times for all CC traces  
 4. **S**tack: stack CC traces of different stations & detect events on the stacked trace  
 5. *dt_p* and *dt_s* are picked by cross-correlation  
-![Zhou et al., (2021)](./doc/PALM_workflow.jpg)
+![Zhou et al., (2021)](./doc/PALM_workflow.jpg)  
 
 - **Usage** (see *example_mess_workdir*)  
 1. Prepare template phase file (e.g. run [PAL](https://github.com/YijianZhou/PAL)) & cut template waveform  
@@ -17,10 +17,10 @@ MESS is a matched filter earthquake detector  <br>
 2021/10 Online training in Chinese: vedio recording on [KouShare](https://www.koushare.com/lives/room/549779)  
 2022/08 Online training in Chinese: vedio recording on [KouShare](https://www.koushare.com/video/videodetail/31656)  
 
-## Installation <br>
+## Installation  
 MESS is a set of codes. All you need is to setup proper Python environment. This can be accomplished easily by installing [Anaconda](https://www.anaconda.com/products/individual#Downloads), [Obspy](https://github.com/obspy/obspy/wiki/Installation-via-Anaconda), and [Pytorch](https://pytorch.org/) sequentially. Or you can use the *env/mess.yml* file with *conda*. 
 
-## References
+## References  
 
 - **Zhou, Y.**, H. Yue, S. Zhou, L. Fang, Y. Zhou, L. Xu, Z. Liu, T. Wang, L. Zhao, & A. Ghosh (2022). Microseismicity along Xiaojiang Fault Zone (Southeastern Tibetan Plateau) and the Characterization of Interseismic Fault Behavior. *Tectonophysics*; 833: 229364. doi: [10.1016/j.tecto.2022.229364](https://doi.org/10.1016/j.tecto.2022.229364)  
 
