@@ -7,9 +7,9 @@ import subprocess
 import multiprocessing as mp
 
 # i/o files
-time_range = '20190704-20190707'
-num_workers = 10
+num_workers = 4
 fsta = 'input/example_pal_format1.sta'
+time_range = '20190704-20190707'
 out_root = '/data/Example_data'
 if not os.path.exists(out_root): os.makedirs(out_root)
 start_time, end_time = [UTCDateTime(date) for date in time_range.split('-')]
