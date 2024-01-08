@@ -28,7 +28,7 @@ def down_stp_data(net, sta, date):
     if len(out_paths)==3: return
     # download & move
     p = subprocess.Popen(['stp'], stdin=subprocess.PIPE)
-    s = "GAIN ON \n"
+    #s = "GAIN ON \n"
     s+= "WIN {} {} HH% {}/{}/{},00:00:00 +1d \n".format(net, sta, year, mon, day)
     s+= "quit \n"
     p.communicate(s.encode())
