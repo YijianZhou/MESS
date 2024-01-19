@@ -23,10 +23,10 @@ class Config(object):
     self.pick_win_s = [1.6,1.6]    # search win for S pick
     self.chn_p = [2]               # chn for P pick
     self.chn_s = [0,1]             # chn for S pick
-    self.amp_win = [1,4]           # win for amp measurement
+    self.amp_win = [1,5]           # win for amp measurement
     # data process
     self.samp_rate = 50
-    self.freq_band = [2.,40.]
+    self.freq_band = [1.,20.]
     self.num_workers = 10
     self.get_data_dict = dp.get_data_dict
     self.get_sta_dict = dp.get_sta_dict
