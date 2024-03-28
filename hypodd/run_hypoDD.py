@@ -14,7 +14,6 @@ num_workers = cfg.num_workers
 keep_grids = cfg.keep_grids
 hypo_root = cfg.hypo_root
 
-
 # write hypoDD input file
 def write_fin(i,j):
     fout = open('input/hypoDD_%s-%s.inp'%(i,j),'w')
@@ -25,6 +24,15 @@ def write_fin(i,j):
         fout.write(line)
     fout.close()
 
+def get_mag_dict():
+    mag_dict = {}
+    f=open('input/event.dat'); lines=f.readlines(); f.close()
+    for line in lines:
+        codes = line.split()
+        evid = str(int(codes[-1]))
+        mag = float(codes[4])
+        mag_dict[evid] = mag
+    return mag_dict
 
 class Run_HypoDD(Dataset):
   """ Dataset for running HypoDD
@@ -52,7 +60,7 @@ class Run_HypoDD(Dataset):
         # get loc info
         lat, lon, dep = codes[1:4]
         dep = round(float(dep) - dep_corr, 2)
-        mag = float(codes[16])
+        mag = mag_dict[evid]
         # get time info
         year, mon, day, hour, mnt, sec = codes[10:16]
         sec = '59.999' if sec=='60.000' else sec
@@ -71,6 +79,7 @@ if __name__ == '__main__':
     os.system('python mk_dt.py')
     os.system('python mk_event.py')
     evid_lists = np.load('input/evid_lists.npy', allow_pickle=True)
+    mag_dict = get_mag_dict()
     # 2. run hypoDD
     idx_list = [(i,j) for i in range(num_grids[0]) for j in range(num_grids[1])]
     dataset = Run_HypoDD(idx_list)
@@ -89,4 +98,3 @@ if __name__ == '__main__':
         for reloc_grid in reloc_grids: os.unlink(reloc_grid)
         for ctlg_grid in ctlg_grids: os.unlink(ctlg_grid)
         for input_file in input_files: os.unlink(input_file)
-

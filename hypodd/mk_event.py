@@ -25,7 +25,6 @@ for i in range(num_grids[0]):
     evid_lists[i].append([])
     fouts.append(open('input/event_%s-%s.dat'%(i,j),'w'))
 
-
 def get_fout_idx(lat, lon):
     evid_idx, fout_idx = [], []
     for i in range(num_grids[0]):
@@ -39,7 +38,6 @@ def get_fout_idx(lat, lon):
         and lat_min+j*dy<lat<=lat_min+(j+1)*dy:
             evid_idx = [i,j]
     return evid_idx, fout_idx
-
 
 f=open(fevent); lines=f.readlines(); f.close()
 for line in lines:
