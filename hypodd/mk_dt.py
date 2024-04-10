@@ -120,8 +120,8 @@ def write_event(event_loc, evid, fout):
     dep += dep_corr
     date = '{:0>4}{:0>2}{:0>2}'.format(ot.year, ot.month, ot.day)
     time = '{:0>2}{:0>2}{:0>2}{:0>2}'.format(ot.hour, ot.minute, ot.second, int(ot.microsecond/1e4))
-    loc = '{:7.4f}   {:8.4f}   {:8.3f}  {:4.1f}'.format(lat, lon, dep, mag)
-    err_rms = '   0.00    0.00   0.0'
+    loc = '{:7.4f}   {:8.4f}   {:8.3f}  {:4.2f}'.format(lat, lon, dep, mag)
+    err_rms = '  0.00    0.00   0.0'
     fout.write('{}  {}   {} {} {:>10}\n'.format(date, time, loc, err_rms, evid))
 
 def calc_mag(event):
@@ -142,7 +142,7 @@ def calc_mag(event):
     # remove one outlier
     mag_dev = abs(mag - np.median(mag))
     mag = np.delete(mag, np.argmax(mag_dev))
-    return round(np.median(mag),2)
+    return np.median(mag)
 
 def select_dt():
     print('select unique dt.cc pairs')
