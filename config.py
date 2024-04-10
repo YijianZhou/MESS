@@ -17,6 +17,7 @@ class Config(object):
     self.temp_win_p = [0.5,1.5]    # temp win for p pick, pre & post P
     self.temp_win_s = [0.5,2.5]    # temp win for s pick, pre & post S
     self.trig_thres = 0.3          # cc thres for det & peak expansion
+    self.if_abs = False            # use abs CC to detect & pick
     self.expand_len = 1.           # win len for cc peak expansion
     self.det_gap = 5.              # gap sec for detection
     self.pick_win_p = [1.0,1.0]    # search win for P pick
