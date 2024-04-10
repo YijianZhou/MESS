@@ -30,7 +30,7 @@ def get_mag_dict():
     for line in lines:
         codes = line.split()
         evid = str(int(codes[-1]))
-        mag = float(codes[4])
+        mag = float(codes[5])
         mag_dict[evid] = mag
     return mag_dict
 
