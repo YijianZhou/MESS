@@ -1,5 +1,6 @@
 # MESS  
 MESS is a matched filter earthquake detector  
+(MESS is now integrated into the PAL repository, and no more updates for this one)
   
 - **MESS Workflow**  
 1. **M**atch: calculate CC trace on every station (matched filter)  
